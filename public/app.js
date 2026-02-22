@@ -5848,12 +5848,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Just check auth status here
   await checkAuthStatus();
   await loadSettings();
-  
-  // Only start polling if authenticated (checkAuthStatus handles updateAuthUI)
-  if (authState.isAuthenticated) {
-    startPolling();
-  }
-  
+
+  // Polling is started by updateAuthUI() when authenticated, don't start here
+
   setupModals();
   setupKeyboardShortcuts();
   
