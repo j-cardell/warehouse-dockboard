@@ -50,10 +50,22 @@
             </div>
             
             <div id="tab-create" style="padding:2rem; background:var(--bg-tertiary); border-radius:0 0 8px 8px;">
-                <div style="text-align:center; padding:2rem;">
+                <div style="text-align:center; padding:2rem; margin-bottom:1.5rem; border-bottom:1px solid var(--border-color);">
                     <p style="margin-bottom:1.5rem; color:var(--text-secondary);">Create a snapshot of current data as a backup.</p>
                     <button class="btn btn-primary btn-large" onclick="createArchive()">📦 Create Archive Now</button>
                     <div id="create-result" style="margin-top:1rem;"></div>
+                </div>
+
+                <div style="text-align:center; padding:2rem;">
+                    <h3 style="margin-bottom:1rem; color:var(--text-primary);">🔄 Restore from Archive</h3>
+                    <p style="margin-bottom:1.5rem; color:var(--text-secondary);">
+                        Upload a previously saved archive to restore state.
+                        <br>
+                        <strong style="color:var(--danger);">⚠️ Warning: This will overwrite current data!</strong>
+                    </p>
+                    <input type="file" id="archive-upload" accept=".json" style="display:none;" onchange="handleArchiveUpload(this)">
+                    <button class="btn btn-warning btn-large" onclick="document.getElementById('archive-upload').click()">📤 Upload Archive</button>
+                    <div id="upload-result" style="margin-top:1rem;"></div>
                 </div>
             </div>
             
@@ -202,6 +214,66 @@
 
         // Check auth on page load
         checkAuth();
+
+        // Archive upload handler
+        async function handleArchiveUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const resultDiv = document.getElementById('upload-result');
+            resultDiv.innerHTML = '<p style="color:var(--text-secondary)">Reading file...</p>';
+
+            try {
+                // Read file
+                const text = await file.text();
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error('Invalid JSON file');
+                }
+
+                // Confirm restore
+                if (!confirm(`⚠️ WARNING: This will overwrite ALL current data!\n\nFile: ${file.name}\nSize: ${(file.size/1024).toFixed(1)} KB\n\nContinue with restore?`)) {
+                    resultDiv.innerHTML = '';
+                    input.value = '';
+                    return;
+                }
+
+                resultDiv.innerHTML = '<p style="color:var(--text-secondary)">Validating and restoring...</p>';
+
+                // Send to server
+                const res = await fetch('/api/archives/restore', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token'),
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+
+                if (result.success) {
+                    resultDiv.innerHTML = `
+                        <div style="color:#4ade80; margin-top:1rem;">
+                            ✅ Restore successful!<br>
+                            Doors: ${result.doorsRestored}<br>
+                            Trailers: ${result.trailersRestored}<br>
+                            Yard Slots: ${result.yardSlotsRestored}<br>
+                            <small>Backup created: ${result.backupFile}</small>
+                        </div>`;
+                    // Reload page after 2 seconds
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    throw new Error(result.error || 'Restore failed');
+                }
+            } catch (e) {
+                resultDiv.innerHTML = `<p style="color:#ef4444;">❌ Error: ${e.message}</p>`;
+            } finally {
+                input.value = '';
+            }
+        }
     </script>
 </body>
 </html>
