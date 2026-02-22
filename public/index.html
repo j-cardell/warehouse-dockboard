@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Dock Board</title>
+    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="carrier-summary.css?v=3">
+    <link rel="stylesheet" href="door-edit.css?v=3">
+    <link rel="stylesheet" href="auth.css?v=3">
+    <link rel="stylesheet" href="time-picker.css?v=1">
+</head>
+<body>
+    <!-- Full Page Login Screen -->
+    <div id="login-screen" class="login-screen">
+        <div class="login-container">
+            <div class="login-header">
+                <h1>📦 Warehouse Dock Board</h1>
+                <p>Please log in to access the dashboard</p>
+            </div>
+            <form id="full-page-login-form">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="fp-login-username" required placeholder="Enter username" autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="fp-login-password" required placeholder="Enter password" autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Login</button>
+                <div id="login-error" class="login-error hidden"></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-container" class="app-container hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-title">
+                <h1>📦 Warehouse Dock Board</h1>
+            </div>
+            <div class="header-search">
+                <div class="search-wrapper">
+                    <input type="text" id="search-input" class="search-input" placeholder="🔍 Search trailers..." autocomplete="off">
+                    <span class="search-kbd-hint">Ctrl+K</span>
+                    <button id="btn-clear-search" class="btn-clear-search hidden" title="Clear search">×</button>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="btn-undo" class="btn btn-secondary" disabled title="Nothing to undo">
+                    ↩️ Undo
+                </button>
+                <button id="btn-create-trailer" class="btn btn-primary">➕ Add Trailer</button>
+                <button id="btn-view-history" class="btn btn-secondary">📜 History</button>
+                <button id="btn-view-shipped" class="btn btn-secondary">📦 Shipped</button>
+                <button id="btn-analytics" class="btn btn-secondary">📊 Analytics</button>
+                <button id="btn-manage-carriers" class="btn btn-secondary">🚛 Carriers</button>
+                <button id="btn-settings" class="btn btn-secondary" title="Display Settings">⚙️ Settings</button>
+                <button id="btn-edit-mode" class="btn btn-warning">✏️ Edit</button>
+                <div id="auth-section" class="auth-section">
+                    <button id="btn-login" class="btn btn-secondary">🔒 Login</button>
+                    <div id="user-info" class="user-info hidden">
+                        <span id="username-display"></span>
+                        <button id="btn-logout" class="btn btn-text">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Bulk Selection Bar -->
+        <div id="bulk-selection-bar" class="bulk-selection-bar hidden">
+            <div class="bulk-info">
+                <span id="bulk-selection-info" class="bulk-selection-info hidden">0 selected</span>
+            </div>
+            <div class="bulk-actions">
+                <button id="btn-bulk-move-to-yard" class="btn btn-bulk" disabled title="Move selected to yard">
+                    🅿️ Move to Yard
+                </button>
+                <button id="btn-bulk-ship" class="btn btn-bulk" disabled title="Mark selected as shipped">
+                    📦 Ship
+                </button>
+                <button id="btn-bulk-delete" class="btn btn-danger btn-bulk" disabled title="Delete selected">
+                    🗑️ Delete
+                </button>
+                <button id="btn-clear-selection" class="btn btn-bulk-cancel" title="Clear selection (Esc)">
+                    ✕ Clear
+                </button>
+                <span class="bulk-hint">Ctrl+Click to select • Drag to move</span>
+            </div>
+        </div>
+
+        <!-- Carrier Summary Bar -->
+        <div id="carrier-summary" class="carrier-summary">
+            <span class="summary-label">Carriers on Dock:</span>
+            <div id="carrier-list" class="carrier-list">
+                <span class="no-carriers">No trailers docked</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Yard Sidebar -->
+            <aside class="yard-sidebar">
+                <!-- Staging Section Container -->
+                <div id="staging-section" class="sidebar-section">
+                    <div class="staging-header">
+                        <h3>⭐ Staging</h3>
+                        <button id="btn-add-staging" class="btn btn-small btn-primary" title="Quick add trailer to staging">+ Add</button>
+                    </div>
+                    <p class="staging-hint">Drag to occupied door to queue</p>
+                    <div id="staging-area" class="staging-area drop-zone" data-location="staging">
+                        <!-- Staging slot will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Resize Handle 1 -->
+                <div id="resize-handle-1" class="resize-handle-vertical" data-target="staging-section"></div>
+
+                <!-- Appointment Queue Section Container -->
+                <div id="appointment-queue-section" class="sidebar-section">
+                    <div class="queue-header">
+                        <h3>📅 Appt Queue</h3>
+                        <span id="appointment-queue-count" class="badge">0</span>
+                    </div>
+                    <p class="queue-hint">Waiting for appointment time</p>
+                    <div id="appointment-queue-area" class="queue-area drop-zone" data-location="appointment-queue">
+                        <!-- Appointment Queued trailers will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Resize Handle for Appt Queue -->
+                <div id="resize-handle-appt" class="resize-handle-vertical" data-target="appointment-queue-section"></div>
+                
+                <!-- Queue Section Container -->
+                <div id="queue-section" class="sidebar-section">
+                    <div class="queue-header">
+                        <h3>⏳ Queue</h3>
+                        <span id="queue-count" class="badge">0</span>
+                    </div>
+                    <p class="queue-hint">Waiting for doors to become available</p>
+                    <div id="queue-area" class="queue-area drop-zone" data-location="queue">
+                        <!-- Queued trailers will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Resize Handle 2 -->
+                <div id="resize-handle-2" class="resize-handle-vertical" data-target="queue-section"></div>
+                
+                <!-- Yard Section Container -->
+                <div id="yard-section" class="sidebar-section">
+                    <div class="yard-header">
+                        <h2>🅿️ Yard Slots</h2>
+                        <span id="yard-count" class="badge">0</span>
+                    </div>
+                    <p class="yard-hint">Drag trailers between slots and doors</p>
+                    <div id="yard-slots-list" class="yard-slots-list">
+                        <!-- Numbered yard slots will be rendered here -->
+                    </div>
+                </div>
+                
+                <!-- Sidebar Bottom Resize Handle -->
+                <div id="resize-handle-sidebar-bottom" class="resize-handle-vertical sidebar-bottom-handle" data-target="yard-sidebar"></div>
+            </aside>
+
+            <!-- Dock Doors Grid -->
+            <section class="dock-section">
+                <div class="dock-header">
+                    <h2>🚪 Dock Doors</h2>
+                    <div class="dock-stats">
+                        <span id="occupied-count" class="stat">Occupied: 0/57</span>
+                        <span id="last-update" class="stat">Updated: --:--:--</span>
+                    </div>
+                </div>
+                <div id="dock-grid" class="dock-grid">
+                    <!-- 57 dock doors will be rendered here -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Create Trailer Modal -->
+    <div id="modal-create" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>➕ Create New Trailer</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Quick Add Mode -->
+                <div id="quick-add-panel" class="quick-add-panel">
+                    <h3>⚡ Quick Add</h3>
+                    <p class="quick-add-hint">Click a carrier to instantly add trailer to Door <span id="quick-target-door">-</span></p>
+                    <div id="quick-carrier-buttons" class="quick-carrier-buttons">
+                        <!-- Top carriers will be rendered here -->
+                        <span class="no-carriers-msg">No carriers yet. Add one below.</span>
+                    </div>
+                    <div class="quick-add-custom">
+                        <input type="text" id="quick-carrier-input" placeholder="Enter carrier name..." autocomplete="off">
+                        <label class="switch-container">
+                            <div class="switch">
+                                <input type="checkbox" id="quick-add-live">
+                                <span class="slider"></span>
+                            </div>
+                            <span class="switch-label">LIVE</span>
+                        </label>
+                        <button type="button" id="btn-quick-add" class="btn btn-primary">Add Trailer</button>
+                    </div>
+                    <div class="quick-add-toggle">
+                        <button type="button" id="btn-show-full-form" class="btn btn-link">📋 Show Full Form for more details</button>
+                    </div>
+                </div>
+                
+                <!-- Full Form Mode (hidden by default) -->
+                <form id="form-create-trailer" class="hidden">
+                    <div class="form-group">
+                        <label for="trailer-customer">Customer</label>
+                        <input type="text" id="trailer-customer" name="customer" placeholder="Customer name (optional)">
+                    </div>
+                    <div class="form-group carrier-autocomplete">
+                        <label for="carrier-input">Carrier *</label>
+                        <input type="text" id="carrier-input" name="carrier" required placeholder="Type carrier name..." autocomplete="off">
+                        <div id="carrier-suggestions" class="autocomplete-list"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="trailer-number">Trailer Number</label>
+                            <input type="text" id="trailer-number" name="trailerNumber" placeholder="Leave blank if none">
+                        </div>
+                        <div class="form-group half">
+                            <label for="load-number">Load/Shipment Number</label>
+                            <input type="text" id="load-number" name="loadNumber" placeholder="Optional">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="appointment-time">Appointment Time</label>
+                        <div class="time-input-wrapper">
+                            <input type="time" id="appointment-time" name="appointmentTime">
+                            <button type="button" class="btn btn-secondary btn-time-picker" title="Pick Time">🕒</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="driver-phone">Phone Number</label>
+                        <input type="tel" id="driver-phone" name="driverPhone" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
+                        <label for="load-type">Load Type *</label>
+                        <select id="load-type" name="loadType" required>
+                            <option value="loaded">📦 Loaded</option>
+                            <option value="empty">📭 Empty</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="switch-container">
+                            <div class="switch">
+                                <input type="checkbox" id="trailer-live" name="isLive">
+                                <span class="slider"></span>
+                            </div>
+                            <span class="switch-label">LIVE LOAD/UNLOAD</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" name="notes" rows="3" placeholder="Optional notes..."></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" id="btn-cancel-full" class="btn btn-secondary">&larr; Back to Quick Add</button>
+                        <button type="submit" class="btn btn-primary">Create Trailer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="modal-history" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>📜 Movement History</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-bar">
+                    <input type="text" id="history-search" placeholder="🔍 Search by trailer, carrier, or door...">
+                    <button id="history-clear" class="btn btn-icon" title="Clear search">✕</button>
+                    <button id="history-refresh" class="btn btn-secondary">🔄 Refresh</button>
+                </div>
+                <div class="history-filters">
+                    <div class="date-filter-group">
+                        <label>From: <input type="date" id="history-date-from"></label>
+                        <label>To: <input type="date" id="history-date-to"></label>
+                        <button id="history-date-clear" class="btn btn-sm btn-secondary">Clear Dates</button>
+                    </div>
+                    <div class="type-filters">
+                        <label><input type="checkbox" id="filter-today" checked> Today only</label>
+                        <label><input type="checkbox" id="filter-dock"> Dock movements</label>
+                        <label><input type="checkbox" id="filter-yard"> Yard movements</label>
+                    </div>
+                </div>
+                <div id="history-list" class="history-list">
+                    <!-- History entries will be rendered here -->
+                </div>
+                <div id="history-empty" class="history-empty hidden">No history entries found.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shipped Orders Modal -->
+    <div id="modal-shipped" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>📦 Shipped Orders</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-bar">
+                    <input type="text" id="shipped-search" placeholder="🔍 Search by trailer number, carrier, customer, or load...">
+                    <button id="shipped-clear" class="btn btn-icon" title="Clear search">✕</button>
+                    <button id="shipped-refresh" class="btn btn-secondary">🔄 Refresh</button>
+                </div>
+                <div class="shipped-stats">
+                    <span id="shipped-count">0 shipped orders</span>
+                    <span id="shipped-date-range"></span>
+                </div>
+                <div id="shipped-list" class="shipped-list">
+                    <!-- Shipped trailers will be rendered here -->
+                </div>
+                <div id="shipped-empty" class="shipped-empty hidden">No shipped orders found.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Carrier Management Modal -->
+    <div id="modal-carriers" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>🚛 Manage Carriers</h2>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-bar">
+                    <input type="text" id="carrier-search" placeholder="🔍 Search carriers...">
+                    <button id="carrier-refresh" class="btn btn-secondary">🔄 Refresh</button>
+                </div>
+                <div class="carriers-sections">
+                    <div class="carriers-section">
+                        <h3>⭐ Favorite Carriers</h3>
+                        <div id="favorite-carriers" class="carriers-list">
+                            <!-- Favorite carriers will be rendered here -->
+                        </div>
+                    </div>
+                    <div class="carriers-section">
+                        <h3>📋 All Carriers</h3>
+                        <div id="all-carriers" class="carriers-list">
+                            <!-- All carriers will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="modal-login" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3>🔒 Login</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="login-form">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="login-username" required placeholder="Enter username">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="login-password" required placeholder="Enter password">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                        <button type="button" class="btn btn-secondary close-modal">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="app.js?v=4"></script>
+</body>
+</html>

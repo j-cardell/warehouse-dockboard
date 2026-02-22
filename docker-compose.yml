@@ -1,0 +1,26 @@
+# Warehouse Dock Board 
+#
+# All files (code + data) stay within project folder
+# No external host paths required
+
+services:
+  dockboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: warehouse-dockboard
+    ports:
+      - "3456:3456"
+    volumes:
+      - dockboard-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - PORT=3456
+      - AUTH_USER=dockadmin
+      - AUTH_PASS=change-this-password
+      - JWT_SECRET=change-this-secret-generate-with-openssl-rand-hex-32
+    restart: unless-stopped
+
+volumes:
+  dockboard-data:
+    driver: local

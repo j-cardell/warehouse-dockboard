@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dockboard Archives</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body { padding: 2rem; background: var(--bg-primary); }
+        .archive-container { max-width: 1000px; margin: 0 auto; background: var(--bg-secondary); padding: 2rem; border-radius: var(--radius-lg); border: 1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+    <div class="archive-container">
+        <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
+            <h1>🗄️ Data Archives</h1>
+            <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
+        </header>
+        
+        <div id="archive-root">
+            <!-- This page reuses the modal logic but inline -->
+            <div class="search-tabs">
+                <button class="search-tab active" onclick="switchTab('create')">📥 Create</button>
+                <button class="search-tab" onclick="switchTab('browse')">📂 Browse</button>
+            </div>
+            
+            <div id="tab-create" style="padding:2rem; background:var(--bg-tertiary); border-radius:0 0 8px 8px;">
+                <p>Use the main dashboard to create archives for now.</p>
+            </div>
+            
+            <div id="tab-browse" style="display:none; padding:2rem; background:var(--bg-tertiary); border-radius:0 0 8px 8px;">
+                <div id="file-list">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple standalone script to fetch list
+        function switchTab(tab) {
+            document.getElementById('tab-create').style.display = tab === 'create' ? 'block' : 'none';
+            document.getElementById('tab-browse').style.display = tab === 'browse' ? 'block' : 'none';
+            if (tab === 'browse') loadFiles();
+        }
+        
+        async function loadFiles() {
+            try {
+                const res = await fetch('/api/archives', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token') } });
+                const data = await res.json();
+                document.getElementById('file-list').innerHTML = data.archives.map(f => 
+                    `<div style="padding:10px; border-bottom:1px solid #444; display:flex; justify-content:space-between;">
+                        <span>${f.name}</span>
+                        <span>${(f.size/1024).toFixed(1)} KB</span>
+                     </div>`
+                ).join('');
+            } catch (e) {
+                document.getElementById('file-list').innerHTML = 'Error: ' + e.message;
+            }
+        }
+    </script>
+</body>
+</html>
