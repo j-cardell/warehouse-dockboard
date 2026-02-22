@@ -50,9 +50,19 @@
                             <span class="setup-hint">Number of loading dock doors</span>
                         </div>
                         <div class="setup-item">
+                            <label for="setup-doors-start">🔢 Door Start #</label>
+                            <input type="number" id="setup-doors-start" min="1" max="9999" value="1" required>
+                            <span class="setup-hint">First door number (e.g., 1, 100, 1000)</span>
+                        </div>
+                        <div class="setup-item">
                             <label for="setup-yard-slots">🅿️ Yard Slots</label>
                             <input type="number" id="setup-yard-slots" min="0" max="500" value="30" required>
                             <span class="setup-hint">Numbered spots in the yard</span>
+                        </div>
+                        <div class="setup-item">
+                            <label for="setup-yard-start">🔢 Yard Start #</label>
+                            <input type="number" id="setup-yard-start" min="1" max="9999" value="1" required>
+                            <span class="setup-hint">First yard slot number</span>
                         </div>
                         <div class="setup-item">
                             <label for="setup-dumpsters">🗑️ Dumpsters</label>
@@ -431,6 +441,6 @@
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="app.js?v=14"></script>
+    <script src="app.js?v=15"></script>
 </body>
 </html>

@@ -100,15 +100,16 @@ function isSetupNeeded() {
 }
 
 // Generate initial facility configuration
-function generateFacilityConfig({ numDoors = 57, numYardSlots = 30, numDumpsters = 0, numRamps = 0 }) {
+function generateFacilityConfig({ numDoors = 57, numYardSlots = 30, numDumpsters = 0, numRamps = 0, doorStart = 1, yardStart = 1 }) {
   const doors = [];
   let order = 0;
 
   // Regular dock doors
   for (let i = 0; i < numDoors; i++) {
+    const doorNum = doorStart + i;
     doors.push({
-      id: `door-${i + 1}`,
-      number: i + 1,
+      id: `door-${doorNum}`,
+      number: doorNum,
       order: order++,
       trailerId: null,
       status: 'empty',
@@ -145,12 +146,15 @@ function generateFacilityConfig({ numDoors = 57, numYardSlots = 30, numDumpsters
     });
   }
 
-  // Yard slots
-  const yardSlots = Array.from({ length: numYardSlots }, (_, i) => ({
-    id: `yard-${i + 1}`,
-    number: i + 1,
-    trailerId: null
-  }));
+  // Yard slots (start from yardStart)
+  const yardSlots = Array.from({ length: numYardSlots }, (_, i) => {
+    const yardNum = yardStart + i;
+    return {
+      id: `yard-${yardNum}`,
+      number: yardNum,
+      trailerId: null
+    };
+  });
 
   return { doors, yardSlots };
 }
@@ -642,7 +646,7 @@ app.post('/api/setup', requireAuth, (req, res) => {
     });
   }
 
-  const { numDoors = 57, numYardSlots = 30, numDumpsters = 0, numRamps = 0 } = req.body;
+  const { numDoors = 57, numYardSlots = 30, numDumpsters = 0, numRamps = 0, doorStart = 1, yardStart = 1 } = req.body;
 
   // Validate inputs
   if (typeof numDoors !== 'number' || numDoors < 0 || numDoors > 500) {
@@ -657,6 +661,12 @@ app.post('/api/setup', requireAuth, (req, res) => {
   if (typeof numRamps !== 'number' || numRamps < 0 || numRamps > 50) {
     return res.status(400).json({ error: 'Invalid number of ramps (0-50)' });
   }
+  if (typeof doorStart !== 'number' || doorStart < 1 || doorStart > 9999) {
+    return res.status(400).json({ error: 'Invalid door start number (1-9999)' });
+  }
+  if (typeof yardStart !== 'number' || yardStart < 1 || yardStart > 9999) {
+    return res.status(400).json({ error: 'Invalid yard start number (1-9999)' });
+  }
 
   try {
     // Generate facility configuration
@@ -664,7 +674,9 @@ app.post('/api/setup', requireAuth, (req, res) => {
       numDoors,
       numYardSlots,
       numDumpsters,
-      numRamps
+      numRamps,
+      doorStart,
+      yardStart
     });
 
     // Create initial state

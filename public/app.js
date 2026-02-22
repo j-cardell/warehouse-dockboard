@@ -5800,7 +5800,9 @@ function showSetupModal() {
         numDoors: parseInt(document.getElementById('setup-doors').value) || 57,
         numYardSlots: parseInt(document.getElementById('setup-yard-slots').value) || 30,
         numDumpsters: parseInt(document.getElementById('setup-dumpsters').value) || 0,
-        numRamps: parseInt(document.getElementById('setup-ramps').value) || 0
+        numRamps: parseInt(document.getElementById('setup-ramps').value) || 0,
+        doorStart: parseInt(document.getElementById('setup-doors-start')?.value) || 1,
+        yardStart: parseInt(document.getElementById('setup-yard-start')?.value) || 1
       };
 
       submitBtn.disabled = true;
