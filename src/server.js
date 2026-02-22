@@ -30,9 +30,20 @@ if (!fs.existsSync(path.join(DATA_DIR, 'archives'))) {
 // Global UI Settings
 const DEFAULT_SETTINGS = {
   trailerDisplay: {
-    carrier: { fontSize: null, color: null },      // e.g., "14px", "#ff0000"
-    trailerNumber: { fontSize: null, color: null }, // e.g., "12px", "#00ff00"
-    loadNumber: { fontSize: null, color: null }     // e.g., "10px", "#0000ff"
+    customer: { fontSize: '9cqw', color: '#ffffff' },
+    carrier: { fontSize: '15cqw', color: '#ffffff' },
+    trailerNumber: { fontSize: '7cqw', color: '#fbbf24' },
+    loadNumber: { fontSize: '9cqw', color: '#94a3b8' },
+    driver: { fontSize: '8cqw' },
+    door: { fontSize: '6.5cqw' },
+    dwell: { fontSize: '5.5cqw' },
+    live: { fontSize: '23cqw' }
+  },
+  sidebarLayout: {
+    sidebarHeight: '1211.67px',
+    stagingFlex: '',
+    apptQueueFlex: '0 0 264.933px',
+    queueFlex: '0 0 363.867px'
   }
 };
 
@@ -686,16 +697,10 @@ app.post('/api/setup', requireAuth, (req, res) => {
       monthlyStats: {}
     }, null, 2));
 
-    // Preserve existing settings if they exist
+    // Preserve existing settings if they exist, otherwise use defaults
     let settings = loadSettings();
     if (!fs.existsSync(SETTINGS_FILE)) {
-      settings = {
-        trailerDisplay: {
-          carrier: { fontSize: null, color: null },
-          trailerNumber: { fontSize: null, color: null },
-          loadNumber: { fontSize: null, color: null }
-        }
-      };
+      settings = DEFAULT_SETTINGS;
       saveSettings(settings);
     }
 
