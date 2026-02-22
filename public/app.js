@@ -76,12 +76,15 @@ async function checkAuthStatus() {
 }
 async function login(username, password) {
   try {
+    console.log('[Auth] Attempting login...');
     const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) });
     if (!res.ok) { const data = await res.json(); throw new Error(data.error || 'Invalid credentials'); }
     const data = await res.json();
+    console.log('[Auth] Login response:', { success: data.success, hasToken: !!data.token, user: data.user });
     if (data.token) {
       authState.token = data.token; authState.user = data.user; authState.isAuthenticated = true;
       localStorage.setItem('dockboard_token', data.token);
+      console.log('[Auth] Token stored, calling updateAuthUI...');
       updateAuthUI(); 
       // Close modal if open
       const modal = document.getElementById('modal-login');
@@ -105,27 +108,10 @@ function requireAuth(cb) { if (!authState.isAuthenticated) { showToast('Login re
 function updateAuthUI() {
   const appContainer = document.getElementById('app-container');
   const loginScreen = document.getElementById('login-screen');
-  
-  if (authState.isAuthenticated) {
-    if (loginScreen) loginScreen.classList.add('hidden');
-    if (appContainer) appContainer.classList.remove('hidden');
-    
-    // Only start polling if we just logged in (interval not running)
-    if (!pollingInterval) {
-        startPolling();
-    }
-  } else {
-    if (loginScreen) loginScreen.classList.remove('hidden');
-    if (appContainer) appContainer.classList.add('hidden');
-    
-    // Stop polling when logged out
-    if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-    }
-  }
 
-  // Update header buttons (still needed for when app is visible)
+  console.log('[AuthUI] updateAuthUI called, isAuthenticated:', authState.isAuthenticated, 'token exists:', !!authState.token);
+
+  // Update header buttons FIRST (before any async operations or returns)
   const loginBtn = document.getElementById('btn-login');
   const logoutBtn = document.getElementById('btn-logout');
   const userInfo = document.getElementById('user-info');
@@ -135,14 +121,39 @@ function updateAuthUI() {
     if (logoutBtn) logoutBtn.classList.remove('hidden');
     if (userInfo) userInfo.classList.remove('hidden');
     if (usernameDisplay) usernameDisplay.textContent = authState.user || '';
+    console.log('[AuthUI] Header updated for authenticated user:', authState.user);
   } else {
     if (loginBtn) loginBtn.classList.remove('hidden');
     if (logoutBtn) logoutBtn.classList.add('hidden');
     if (userInfo) userInfo.classList.add('hidden');
+    console.log('[AuthUI] Header updated for logged out state');
   }
-  ['btn-edit-mode','btn-settings','btn-view-history','btn-analytics','btn-manage-carriers'].forEach(id => {
-    const btn = document.getElementById(id); if (btn) btn.disabled = !authState.isAuthenticated;
-  });
+
+  // Show/hide login screen and app container based on auth state
+  if (authState.isAuthenticated) {
+    // Check if setup is needed first
+    checkSetupStatus().then(needsSetup => {
+      if (needsSetup) {
+        console.log('[AuthUI] Setup needed, showing setup modal');
+        if (loginScreen) loginScreen.classList.add('hidden');
+        showSetupModal();
+      } else {
+        console.log('[AuthUI] Showing app');
+        if (loginScreen) loginScreen.classList.add('hidden');
+        if (appContainer) appContainer.classList.remove('hidden');
+        if (!pollingInterval) startPolling();
+      }
+    });
+  } else {
+    console.log('[AuthUI] Showing login screen');
+    if (loginScreen) loginScreen.classList.remove('hidden');
+    if (appContainer) appContainer.classList.add('hidden');
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      pollingInterval = null;
+    }
+  }
+
 }
 
 // ============================================
@@ -611,8 +622,13 @@ async function apiCall(endpoint, method = 'GET', body = null) {
   if (authHeader) options.headers['Authorization'] = authHeader;
   if (body) options.body = JSON.stringify(body);
 
+  console.log(`[API] ${method} ${url}`, { hasAuth: !!authHeader, tokenPreview: authHeader ? authHeader.substring(0, 20) + '...' : 'none' });
+
   const response = await fetch(url, options);
-  if (response.status === 401) { authState.token = null; authState.isAuthenticated = false; localStorage.removeItem('dockboard_token'); updateAuthUI(); throw new Error('Please login'); }
+  if (response.status === 401) {
+    console.error('[Auth] 401 Unauthorized - clearing token');
+    authState.token = null; authState.isAuthenticated = false; localStorage.removeItem('dockboard_token'); updateAuthUI(); throw new Error('Please login');
+  }
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.error || `HTTP ${response.status}`);
@@ -816,7 +832,6 @@ function formatDwellTime(createdAt) {
   if (hours === null) return '';
   if (hours < 1) return `${minutes}m`;
   return `${hours}h ${minutes}m`;
-  return `${hours}h`;
 }
 
 // ============================================================================
@@ -5724,11 +5739,111 @@ function openTimePicker(targetInputId) {
 }
 
 // ============================================================================
+// First-Run Setup
+// ============================================================================
+
+// Check if setup is needed
+async function checkSetupStatus() {
+  try {
+    const res = await fetch('/api/setup/status');
+    const data = await res.json();
+    return data.setupNeeded;
+  } catch (e) {
+    console.error('Failed to check setup status:', e);
+    return false; // Assume setup done if we can't check
+  }
+}
+
+// Show setup modal
+function showSetupModal() {
+  const modal = document.getElementById('setup-modal');
+  const loginScreen = document.getElementById('login-screen');
+  if (!modal) return;
+
+  // Hide login screen completely
+  if (loginScreen) loginScreen.classList.add('hidden');
+
+  // Show modal (needs both hidden removed AND active added)
+  modal.classList.remove('hidden');
+  modal.classList.add('active');
+
+  // Update summary when inputs change
+  const updateSummary = () => {
+    const doors = parseInt(document.getElementById('setup-doors')?.value) || 0;
+    const yardSlots = parseInt(document.getElementById('setup-yard-slots')?.value) || 0;
+    const summary = document.getElementById('setup-summary');
+    if (summary) {
+      summary.innerHTML = `<p>Total: <strong>${doors}</strong> doors + <strong>${yardSlots}</strong> yard slots</p>`;
+    }
+  };
+
+  // Attach listeners
+  ['setup-doors', 'setup-yard-slots', 'setup-dumpsters', 'setup-ramps'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', updateSummary);
+      el.addEventListener('change', updateSummary);
+    }
+  });
+
+  // Setup submit handler
+  const submitBtn = document.getElementById('btn-setup-submit');
+  if (submitBtn) {
+    submitBtn.addEventListener('click', async () => {
+      const form = document.getElementById('setup-form');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      const config = {
+        numDoors: parseInt(document.getElementById('setup-doors').value) || 57,
+        numYardSlots: parseInt(document.getElementById('setup-yard-slots').value) || 30,
+        numDumpsters: parseInt(document.getElementById('setup-dumpsters').value) || 0,
+        numRamps: parseInt(document.getElementById('setup-ramps').value) || 0
+      };
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating...';
+
+      try {
+        const res = await fetch('/api/setup', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authState.token}`
+          },
+          body: JSON.stringify(config)
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          showToast('Facility created successfully! Loading...', 'success');
+          // Reload page to complete initialization with event listeners
+          window.location.reload();
+        } else {
+          throw new Error(data.error || 'Setup failed');
+        }
+      } catch (e) {
+        console.error('Setup error:', e);
+        showToast(e.message || 'Failed to create facility', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Facility';
+      }
+    });
+  }
+}
+
+// ============================================================================
 // Initialization
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Check auth first
+  console.log('[Init] DOMContentLoaded fired');
+
+  // Setup is checked AFTER login (in updateAuthUI) for security
+  // Just check auth status here
   await checkAuthStatus();
   await loadSettings();
   

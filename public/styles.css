@@ -3955,3 +3955,122 @@ input:checked + .slider:before {
     box-shadow: 0 0 0 2px #ef4444, 0 0 15px rgba(239, 68, 68, 0.4) !important;
     z-index: 10;
 }
+
+/* ============================================
+   Setup Modal Styles
+   ============================================ */
+
+.setup-modal-content {
+    max-width: 600px;
+    width: 90%;
+}
+
+.setup-modal-content .modal-header {
+    text-align: center;
+    padding-bottom: 1rem;
+}
+
+.setup-modal-content .modal-header h2 {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.setup-modal-content .modal-subtitle {
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.setup-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.setup-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.setup-item label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.setup-item input[type="number"] {
+    padding: 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    text-align: center;
+    width: 100%;
+    transition: var(--transition);
+}
+
+.setup-item input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+.setup-item input[type="number"]:invalid {
+    border-color: #ef4444;
+}
+
+.setup-hint {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.setup-summary {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.setup-summary p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 1rem;
+}
+
+.setup-summary strong {
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+.setup-modal-content .modal-footer {
+    justify-content: center;
+    padding-top: 1rem;
+}
+
+.btn-large {
+    padding: 0.875rem 2rem;
+    font-size: 1.1rem;
+    min-width: 200px;
+}
+
+/* Responsive adjustments for setup modal */
+@media (max-width: 600px) {
+    .setup-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .setup-modal-content .modal-header h2 {
+        font-size: 1.4rem;
+    }
+
+    .setup-item input[type="number"] {
+        font-size: 1.1rem;
+        padding: 0.625rem;
+    }
+}

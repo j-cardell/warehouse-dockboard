@@ -52,6 +52,8 @@ function saveSettings(settings) {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
 }
 
+const DEFAULT_CARRIERS = []; // Start empty - carriers added as trailers are created
+
 // Default state: 57 doors
 const DEFAULT_DOORS = Array.from({ length: 57 }, (_, i) => ({
   id: `door-${i + 1}`,
@@ -63,14 +65,84 @@ const DEFAULT_DOORS = Array.from({ length: 57 }, (_, i) => ({
   type: 'normal'
 }));
 
-const DEFAULT_CARRIERS = []; // Start empty - carriers added as trailers are created
-
 // Default yard slots: 30 numbered slots
 const DEFAULT_YARD_SLOTS = Array.from({ length: 30 }, (_, i) => ({
   id: `yard-${i + 1}`,
   number: i + 1,
   trailerId: null
 }));
+
+// Check if setup is needed (no state file or empty doors/yardSlots)
+function isSetupNeeded() {
+  if (!fs.existsSync(STATE_FILE)) {
+    return true;
+  }
+  try {
+    const content = fs.readFileSync(STATE_FILE, 'utf-8');
+    const state = JSON.parse(content);
+    // Consider empty if no doors and no yard slots
+    return (!state.doors || state.doors.length === 0) &&
+           (!state.yardSlots || state.yardSlots.length === 0);
+  } catch (e) {
+    return true;
+  }
+}
+
+// Generate initial facility configuration
+function generateFacilityConfig({ numDoors = 57, numYardSlots = 30, numDumpsters = 0, numRamps = 0 }) {
+  const doors = [];
+  let order = 0;
+
+  // Regular dock doors
+  for (let i = 0; i < numDoors; i++) {
+    doors.push({
+      id: `door-${i + 1}`,
+      number: i + 1,
+      order: order++,
+      trailerId: null,
+      status: 'empty',
+      inService: true,
+      type: 'normal'
+    });
+  }
+
+  // Dumpsters as blank doors with custom labels
+  for (let i = 0; i < numDumpsters; i++) {
+    doors.push({
+      id: `dumpster-${uuidv4()}`,
+      number: null,
+      order: order++,
+      labelText: `Dumpster ${i + 1}`,
+      trailerId: null,
+      status: 'empty',
+      inService: true,
+      type: 'blank'
+    });
+  }
+
+  // Ramps as blank doors with custom labels
+  for (let i = 0; i < numRamps; i++) {
+    doors.push({
+      id: `ramp-${uuidv4()}`,
+      number: null,
+      order: order++,
+      labelText: `Ramp ${i + 1}`,
+      trailerId: null,
+      status: 'empty',
+      inService: true,
+      type: 'blank'
+    });
+  }
+
+  // Yard slots
+  const yardSlots = Array.from({ length: numYardSlots }, (_, i) => ({
+    id: `yard-${i + 1}`,
+    number: i + 1,
+    trailerId: null
+  }));
+
+  return { doors, yardSlots };
+}
 
 // Sanitize input to prevent injection
 // Allows common business characters but strips dangerous HTML/script characters
@@ -465,11 +537,12 @@ function generateToken(username) {
 // Verify JWT token middleware
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader) {
+    console.log('[Auth] No authorization header');
     return res.status(401).json({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
   }
-  
+
   // Support both "Bearer <token>" and legacy basic auth for migration
   if (authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
@@ -478,6 +551,7 @@ function requireAuth(req, res, next) {
       req.user = decoded.username;
       return next();
     } catch (err) {
+      console.log('[Auth] Token verification failed:', err.message);
       return res.status(401).json({ error: 'Invalid or expired token', code: 'TOKEN_INVALID' });
     }
   }
@@ -538,6 +612,114 @@ app.get('/api/auth/status', (req, res) => {
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Check if setup is needed (public - for first-run detection)
+app.get('/api/setup/status', (req, res) => {
+  res.json({
+    setupNeeded: isSetupNeeded(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Run initial setup (protected - requires authentication)
+app.post('/api/setup', requireAuth, (req, res) => {
+  // Only allow setup if state doesn't exist yet
+  if (!isSetupNeeded()) {
+    return res.status(403).json({
+      error: 'Setup already completed. Delete data/state.json to reset.'
+    });
+  }
+
+  const { numDoors = 57, numYardSlots = 30, numDumpsters = 0, numRamps = 0 } = req.body;
+
+  // Validate inputs
+  if (typeof numDoors !== 'number' || numDoors < 0 || numDoors > 500) {
+    return res.status(400).json({ error: 'Invalid number of doors (0-500)' });
+  }
+  if (typeof numYardSlots !== 'number' || numYardSlots < 0 || numYardSlots > 500) {
+    return res.status(400).json({ error: 'Invalid number of yard slots (0-500)' });
+  }
+  if (typeof numDumpsters !== 'number' || numDumpsters < 0 || numDumpsters > 50) {
+    return res.status(400).json({ error: 'Invalid number of dumpsters (0-50)' });
+  }
+  if (typeof numRamps !== 'number' || numRamps < 0 || numRamps > 50) {
+    return res.status(400).json({ error: 'Invalid number of ramps (0-50)' });
+  }
+
+  try {
+    // Generate facility configuration
+    const { doors, yardSlots } = generateFacilityConfig({
+      numDoors,
+      numYardSlots,
+      numDumpsters,
+      numRamps
+    });
+
+    // Create initial state
+    const initialState = {
+      doors,
+      trailers: [],
+      carriers: [],
+      yardTrailers: [],
+      yardSlots,
+      staging: null,
+      queuedTrailers: [],
+      appointmentQueue: []
+    };
+
+    // Ensure data directory exists
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(path.join(DATA_DIR, 'archives'))) {
+      fs.mkdirSync(path.join(DATA_DIR, 'archives'), { recursive: true });
+    }
+
+    // Save all data files
+    fs.writeFileSync(STATE_FILE, JSON.stringify(initialState, null, 2));
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify({ entries: [] }, null, 2));
+    fs.writeFileSync(ANALYTICS_FILE, JSON.stringify({
+      snapshots: [],
+      dailyStats: {},
+      weeklyStats: {},
+      monthlyStats: {}
+    }, null, 2));
+
+    // Preserve existing settings if they exist
+    let settings = loadSettings();
+    if (!fs.existsSync(SETTINGS_FILE)) {
+      settings = {
+        trailerDisplay: {
+          carrier: { fontSize: null, color: null },
+          trailerNumber: { fontSize: null, color: null },
+          loadNumber: { fontSize: null, color: null }
+        }
+      };
+      saveSettings(settings);
+    }
+
+    console.log('[Setup] Initial configuration created:');
+    console.log(`  - ${numDoors} dock doors`);
+    console.log(`  - ${numYardSlots} yard slots`);
+    console.log(`  - ${numDumpsters} dumpsters`);
+    console.log(`  - ${numRamps} ramps`);
+
+    res.json({
+      success: true,
+      config: {
+        numDoors,
+        numYardSlots,
+        numDumpsters,
+        numRamps,
+        totalDoors: doors.length
+      },
+      message: 'Setup complete. Please log in to continue.'
+    });
+  } catch (error) {
+    console.error('[Setup] Error:', error);
+    res.status(500).json({ error: 'Failed to create initial configuration' });
+  }
 });
 
 // Get global settings (public - needed for rendering)
@@ -2567,24 +2749,38 @@ app.get('/api/analytics/position-patterns', requireAuth, (req, res) => {
 
 // Start server - bind to 0.0.0.0 to accept connections from outside container
 app.listen(PORT, '0.0.0.0', () => {
+  const state = loadState();
+  const doorCount = state.doors?.length || 0;
+  const yardSlotCount = state.yardSlots?.length || 0;
+  const needsSetup = isSetupNeeded();
+
   console.log(`╔════════════════════════════════════╗`);
   console.log(`║   Warehouse Dock Board Server      ║`);
   console.log(`╠════════════════════════════════════╣`);
   console.log(`║  🌐 http://0.0.0.0:${PORT} (all interfaces)  ║`);
   console.log(`║  📁 Data: ./data/                  ║`);
-  console.log(`║  🚪 Doors: 57                      ║`);
-  console.log(`║  🅿️ Yard Slots: 30                  ║`);
-  console.log(`║  🔒 Auth: ${AUTH_USER}                ║`);
+  if (needsSetup) {
+    console.log(`║  ⚠️  First run - Setup required    ║`);
+  } else {
+    console.log(`║  🚪 Doors: ${String(doorCount).padEnd(26)}║`);
+    console.log(`║  🅿️ Yard Slots: ${String(yardSlotCount).padEnd(20)}║`);
+  }
+  console.log(`║  🔒 Auth: ${AUTH_USER.padEnd(27)}║`);
   console.log(`╚════════════════════════════════════╝`);
-  
-  // Calculate daily dwell analytics once per day (instead of 15-min snapshots)
-  // Also calculates on-demand when API is called for today's data
-  setInterval(() => {
-    const today = new Date().toISOString().split('T')[0];
-    calculateDailyDwell(today);
-  }, 24 * 60 * 60 * 1000); // Once per day
-  
-  // Initial calculation for today
-  calculateDailyDwell(new Date().toISOString().split('T')[0]);
-  console.log('[Analytics] Daily dwell analytics active - calculated from history');
+
+  if (!needsSetup) {
+    // Calculate daily dwell analytics once per day (instead of 15-min snapshots)
+    // Also calculates on-demand when API is called for today's data
+    setInterval(() => {
+      const today = new Date().toISOString().split('T')[0];
+      calculateDailyDwell(today);
+    }, 24 * 60 * 60 * 1000); // Once per day
+
+    // Initial calculation for today
+    calculateDailyDwell(new Date().toISOString().split('T')[0]);
+    console.log('[Analytics] Daily dwell analytics active - calculated from history');
+  } else {
+    console.log('[Setup] Server ready for initial configuration');
+    console.log('[Setup] Visit http://localhost:' + PORT + ' to complete setup');
+  }
 });

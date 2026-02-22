@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Warehouse Dock Board</title>
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=4">
     <link rel="stylesheet" href="carrier-summary.css?v=3">
     <link rel="stylesheet" href="door-edit.css?v=3">
     <link rel="stylesheet" href="auth.css?v=3">
@@ -30,6 +30,49 @@
                 <button type="submit" class="btn btn-primary btn-block">Login</button>
                 <div id="login-error" class="login-error hidden"></div>
             </form>
+        </div>
+    </div>
+
+    <!-- Setup Modal - First Run Configuration -->
+    <div id="setup-modal" class="modal hidden">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content setup-modal-content">
+            <div class="modal-header">
+                <h2>🏭 Welcome to Warehouse Dock Board</h2>
+                <p class="modal-subtitle">Configure your facility to get started</p>
+            </div>
+            <div class="modal-body">
+                <form id="setup-form">
+                    <div class="setup-grid">
+                        <div class="setup-item">
+                            <label for="setup-doors">🚪 Dock Doors</label>
+                            <input type="number" id="setup-doors" min="1" max="500" value="57" required>
+                            <span class="setup-hint">Number of loading dock doors</span>
+                        </div>
+                        <div class="setup-item">
+                            <label for="setup-yard-slots">🅿️ Yard Slots</label>
+                            <input type="number" id="setup-yard-slots" min="0" max="500" value="30" required>
+                            <span class="setup-hint">Numbered spots in the yard</span>
+                        </div>
+                        <div class="setup-item">
+                            <label for="setup-dumpsters">🗑️ Dumpsters</label>
+                            <input type="number" id="setup-dumpsters" min="0" max="50" value="0" required>
+                            <span class="setup-hint">Waste container locations</span>
+                        </div>
+                        <div class="setup-item">
+                            <label for="setup-ramps">🛤️ Ramps</label>
+                            <input type="number" id="setup-ramps" min="0" max="50" value="0" required>
+                            <span class="setup-hint">Ground-level ramp locations</span>
+                        </div>
+                    </div>
+                    <div class="setup-summary" id="setup-summary">
+                        <p>Total: <strong>57</strong> doors + <strong>30</strong> yard slots</p>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" id="btn-setup-submit" class="btn btn-primary btn-large">Create Facility</button>
+            </div>
         </div>
     </div>
 
@@ -388,6 +431,6 @@
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=14"></script>
 </body>
 </html>
