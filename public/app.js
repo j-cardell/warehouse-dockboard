@@ -4385,29 +4385,50 @@ function setupModals() {
 // History & Carriers
 // ============================================================================
 
-async function loadHistory(search = '') {
+// History pagination state
+let historyOffset = 0;
+let historyTotal = 0;
+let currentHistorySearch = '';
+const HISTORY_PAGE_SIZE = 500;
+
+async function loadHistory(search = '', append = false) {
   const list = document.getElementById('history-list');
   const emptyMsg = document.getElementById('history-empty');
+  const loadMoreDiv = document.getElementById('history-load-more');
+  const loadMoreBtn = document.getElementById('btn-load-more');
+  const shownSpan = document.getElementById('history-shown');
+  const totalSpan = document.getElementById('history-total');
+
   if (!list) return;
-  
+
+  // If not appending, reset offset and clear list
+  if (!append) {
+    historyOffset = 0;
+    currentHistorySearch = search;
+    list.innerHTML = '';
+  }
+
   try {
     const dateFrom = document.getElementById('history-date-from')?.value;
     const dateTo = document.getElementById('history-date-to')?.value;
-    
-    const data = await getHistory(search, 100, 0, dateFrom, dateTo);
-    if (data.entries.length === 0) {
-      list.innerHTML = '';
+
+    const data = await getHistory(search, HISTORY_PAGE_SIZE, historyOffset, dateFrom, dateTo);
+    historyTotal = data.total || data.entries.length;
+
+    if (data.entries.length === 0 && historyOffset === 0) {
       if (emptyMsg) emptyMsg.classList.remove('hidden');
+      if (loadMoreDiv) loadMoreDiv.classList.add('hidden');
       return;
     }
-    
+
     if (emptyMsg) emptyMsg.classList.add('hidden');
-    
-    list.innerHTML = data.entries.map(h => {
+
+    // Render entries
+    const newEntries = data.entries.map(h => {
       // Determine action styling and label
       let actionClass = 'updated';
       let actionLabel = 'Updated';
-      
+
       if (h.action?.includes('CREATED')) { actionClass = 'created'; actionLabel = 'Created'; }
       else if (h.action?.includes('MOVED')) { actionClass = 'moved'; actionLabel = 'Moved'; }
       else if (h.action?.includes('DELETED')) { actionClass = 'deleted'; actionLabel = 'Deleted'; }
@@ -4415,22 +4436,18 @@ async function loadHistory(search = '') {
       else if (h.action === 'TRAILER_EMPTY') { actionClass = 'empty'; actionLabel = 'Empty'; }
       else if (h.action === 'TRAILER_SHIPPED') { actionClass = 'shipped'; actionLabel = 'Shipped'; }
       else if (h.action === 'SHIPPED_DELETED') { actionClass = 'deleted'; actionLabel = 'Deleted Record'; }
-      
-      // Get carrier from various sources (backwards compatible)
+
       const carrier = h.carrier || (h.updates?.carrier);
       const trailerNumber = h.trailerNumber || (h.updates?.number);
-      
-      // Build trailer identifier: "Carrier trailer" or "Carrier trailer 12345"
-      let trailerIdText = carrier && trailerNumber 
+
+      let trailerIdText = carrier && trailerNumber
         ? `${carrier} trailer ${trailerNumber}`
-        : carrier 
+        : carrier
           ? `${carrier} trailer`
           : 'Trailer';
-      
-      // Get location
+
       const atLocation = h.location || h.previousLocation || (h.doorNumber ? `Door ${h.doorNumber}` : '');
-      
-      // For TRAILER_UPDATED, build the change description
+
       let changeDesc = '';
       if (h.action === 'TRAILER_UPDATED' && h.changes?.length > 0) {
         const fieldLabels = {
@@ -4443,7 +4460,7 @@ async function loadHistory(search = '') {
         };
         const change = h.changes[0];
         const label = fieldLabels[change.field] || change.field;
-        
+
         if (!change.from) {
           changeDesc = `added ${label} ${change.to}`;
         } else if (!change.to) {
@@ -4452,7 +4469,6 @@ async function loadHistory(search = '') {
           changeDesc = `changed ${label} ${change.from} → ${change.to}`;
         }
       } else if (h.action === 'TRAILER_UPDATED' && h.updates) {
-        // Fallback for old entries without changes array
         const updatedFields = Object.keys(h.updates).filter(k => k !== 'carrier' && k !== 'status');
         if (updatedFields.length > 0) {
           const fieldLabels = {
@@ -4467,14 +4483,12 @@ async function loadHistory(search = '') {
           changeDesc = `marked ${h.updates.status}`;
         }
       }
-      
-      // Auto-assign info
+
       let autoAssignHtml = '';
       if (h.autoAssignedToDoor) {
         autoAssignHtml = `<div class="history-change" style="color:var(--accent-secondary)">↻ Auto-filled Door ${h.autoAssignedToDoor} with ${h.autoAssignedCarrier || 'next in queue'}</div>`;
       }
 
-      // Build location line with arrows for movements
       let locationHtml = '';
       if (h.action?.includes('MOVED')) {
         const from = h.previousLocation || 'Yard';
@@ -4487,7 +4501,6 @@ async function loadHistory(search = '') {
           </div>
         `;
       } else if (h.action === 'TRAILER_SHIPPED') {
-          // Special move display for shipped
           const from = h.from || atLocation || 'Dock';
           locationHtml = `
             <div class="history-location">
@@ -4497,7 +4510,7 @@ async function loadHistory(search = '') {
             </div>
           `;
       }
-      
+
       return `
       <div class="history-item" data-trailer-id="${h.trailerId || ''}" title="Double-click to edit trailer">
         <div class="history-item-header">
@@ -4514,14 +4527,36 @@ async function loadHistory(search = '') {
         ${autoAssignHtml}
       </div>
     `}).join('');
-    
+
+    // Append to existing content if loading more, otherwise replace
+    if (append) {
+      list.innerHTML += newEntries;
+    } else {
+      list.innerHTML = newEntries;
+    }
+
+    // Update offset for next load
+    historyOffset += data.entries.length;
+
+    // Update load more button visibility and counts
+    const shownCount = historyOffset;
+    if (shownSpan) shownSpan.textContent = shownCount;
+    if (totalSpan) totalSpan.textContent = historyTotal;
+
+    if (loadMoreDiv) {
+      if (shownCount < historyTotal) {
+        loadMoreDiv.classList.remove('hidden');
+      } else {
+        loadMoreDiv.classList.add('hidden');
+      }
+    }
+
     // Add double-click handlers to history items
     list.querySelectorAll('.history-item[data-trailer-id]').forEach(item => {
       item.addEventListener('dblclick', () => {
         const trailerId = item.dataset.trailerId;
         if (trailerId) {
-          // Find the trailer in current state (including shipped)
-          const trailer = state.trailers.find(t => t.id === trailerId) || 
+          const trailer = state.trailers.find(t => t.id === trailerId) ||
                          state.yardTrailers.find(t => t.id === trailerId) ||
                          state.shippedTrailers?.find(t => t.id === trailerId) ||
                          (state.staging?.id === trailerId ? state.staging : null) ||
@@ -4534,10 +4569,13 @@ async function loadHistory(search = '') {
         }
       });
     });
-    
+
   } catch (error) {
     console.error('History load error:', error);
-    list.innerHTML = '<div class="history-empty">Failed to load history</div>';
+    if (!append) {
+      const list = document.getElementById('history-list');
+      if (list) list.innerHTML = '<div class="history-empty">Failed to load history</div>';
+    }
   }
 }
 
@@ -4547,7 +4585,7 @@ async function loadShipped(search = '') {
   const emptyMsg = document.getElementById('shipped-empty');
   const countEl = document.getElementById('shipped-count');
   if (!list) return;
-  
+
   try {
     // Fetch current state to get shippedTrailers
     await fetchState();
@@ -5896,8 +5934,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderDoors();
   });
   
+  // Archives button (edit mode only)
+  document.getElementById('btn-archives')?.addEventListener('click', () => {
+    if (requireAuth()) window.location.href = '/archives.html';
+  });
+
   // Protected buttons
   document.getElementById('btn-view-history')?.addEventListener('click', () => { if (requireAuth()) { openModal('modal-history'); loadHistory(); } });
+
+  // History load more button
+  document.getElementById('btn-load-more')?.addEventListener('click', () => {
+    loadHistory(currentHistorySearch, true); // Append = true
+  });
   document.getElementById('btn-view-shipped')?.addEventListener('click', () => { openModal('modal-shipped'); loadShipped(); });
   document.getElementById('btn-analytics')?.addEventListener('click', () => { if (requireAuth()) showAnalyticsModal(); });
   document.getElementById('btn-manage-carriers')?.addEventListener('click', () => { if (requireAuth()) { openModal('modal-carriers'); renderCarriersList(); } });

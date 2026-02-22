@@ -11,12 +11,37 @@
     </style>
 </head>
 <body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:var(--bg-primary); z-index:2000; align-items:center; justify-content:center;">
+        <div class="login-container" style="max-width:400px; width:90%;">
+            <div class="login-header" style="text-align:center; margin-bottom:1.5rem;">
+                <h1>🔒 Archives</h1>
+                <p>Please log in to access archives</p>
+            </div>
+            <form id="login-form" style="display:flex; flex-direction:column; gap:1rem;">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="login-username" required style="width:100%; padding:0.75rem; border:1px solid var(--border-color); border-radius:var(--radius-md); background:var(--bg-primary); color:var(--text-primary);">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="login-password" required style="width:100%; padding:0.75rem; border:1px solid var(--border-color); border-radius:var(--radius-md); background:var(--bg-primary); color:var(--text-primary);">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;">Login</button>
+                <div id="login-error" style="color:#ef4444; text-align:center; display:none;"></div>
+            </form>
+            <div style="text-align:center; margin-top:1rem;">
+                <a href="/" class="btn btn-text">← Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
     <div class="archive-container">
         <header style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2rem;">
             <h1>🗄️ Data Archives</h1>
             <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
         </header>
-        
+
         <div id="archive-root">
             <!-- This page reuses the modal logic but inline -->
             <div class="search-tabs">
@@ -25,7 +50,11 @@
             </div>
             
             <div id="tab-create" style="padding:2rem; background:var(--bg-tertiary); border-radius:0 0 8px 8px;">
-                <p>Use the main dashboard to create archives for now.</p>
+                <div style="text-align:center; padding:2rem;">
+                    <p style="margin-bottom:1.5rem; color:var(--text-secondary);">Create a snapshot of current data as a backup.</p>
+                    <button class="btn btn-primary btn-large" onclick="createArchive()">📦 Create Archive Now</button>
+                    <div id="create-result" style="margin-top:1rem;"></div>
+                </div>
             </div>
             
             <div id="tab-browse" style="display:none; padding:2rem; background:var(--bg-tertiary); border-radius:0 0 8px 8px;">
@@ -46,16 +75,133 @@
             try {
                 const res = await fetch('/api/archives', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token') } });
                 const data = await res.json();
-                document.getElementById('file-list').innerHTML = data.archives.map(f => 
-                    `<div style="padding:10px; border-bottom:1px solid #444; display:flex; justify-content:space-between;">
+                document.getElementById('file-list').innerHTML = data.archives.map(f =>
+                    `<div style="padding:10px; border-bottom:1px solid #444; display:flex; justify-content:space-between; align-items:center;">
                         <span>${f.name}</span>
-                        <span>${(f.size/1024).toFixed(1)} KB</span>
+                        <div>
+                            <span style="margin-right:1rem; color:var(--text-muted);">${(f.size/1024).toFixed(1)} KB</span>
+                            <button class="btn btn-small btn-secondary" onclick="downloadArchive('${f.name}')">Download</button>
+                        </div>
                      </div>`
-                ).join('');
+                ).join('') || '<p style="color:var(--text-muted)">No archives yet.</p>';
             } catch (e) {
                 document.getElementById('file-list').innerHTML = 'Error: ' + e.message;
             }
         }
+
+        async function createArchive() {
+            const btn = document.querySelector('#tab-create button');
+            const result = document.getElementById('create-result');
+            btn.disabled = true;
+            btn.textContent = 'Creating...';
+            result.innerHTML = '';
+
+            try {
+                const res = await fetch('/api/archives', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token') }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    result.innerHTML = `<p style="color:var(--success)">✅ Archive created: ${data.filename}</p>`;
+                } else {
+                    throw new Error(data.error || 'Failed to create archive');
+                }
+            } catch (e) {
+                result.innerHTML = `<p style="color:#ef4444;">❌ Error: ${e.message}</p>`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📦 Create Archive Now';
+            }
+        }
+
+        async function downloadArchive(filename) {
+            try {
+                const res = await fetch(`/api/archives/${filename}`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token') }
+                });
+                if (!res.ok) throw new Error('Download failed');
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } catch (e) {
+                alert('Download failed: ' + e.message);
+            }
+        }
+
+        // Auth handling
+        function getToken() { return localStorage.getItem('dockboard_token'); }
+
+        async function checkAuth() {
+            const token = getToken();
+            if (!token) {
+                showLogin();
+                return false;
+            }
+            // Verify token is valid
+            try {
+                const res = await fetch('/api/auth/status', { headers: { 'Authorization': `Bearer ${token}` } });
+                const data = await res.json();
+                if (data.authenticated) {
+                    hideLogin();
+                    return true;
+                } else {
+                    localStorage.removeItem('dockboard_token');
+                    showLogin();
+                    return false;
+                }
+            } catch (e) {
+                showLogin();
+                return false;
+            }
+        }
+
+        function showLogin() {
+            document.getElementById('login-screen').style.display = 'flex';
+            document.querySelector('.archive-container').style.display = 'none';
+        }
+
+        function hideLogin() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.querySelector('.archive-container').style.display = 'block';
+        }
+
+        // Login form handler
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (data.token) {
+                    localStorage.setItem('dockboard_token', data.token);
+                    errorDiv.style.display = 'none';
+                    hideLogin();
+                } else {
+                    throw new Error('Login failed');
+                }
+            } catch (e) {
+                errorDiv.textContent = 'Invalid credentials';
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        // Check auth on page load
+        checkAuth();
     </script>
 </body>
 </html>

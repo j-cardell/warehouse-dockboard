@@ -3957,6 +3957,25 @@ input:checked + .slider:before {
 }
 
 /* ============================================
+   Edit Mode - Show/Hide Edit-Only Elements
+   ============================================ */
+
+/* Hide edit-only elements by default */
+.edit-only {
+    display: none !important;
+}
+
+/* Show edit-only elements when in edit mode */
+body.edit-mode-active .edit-only {
+    display: inline-flex !important;
+}
+
+/* For button elements specifically */
+body.edit-mode-active button.edit-only {
+    display: inline-flex !important;
+}
+
+/* ============================================
    Setup Modal Styles
    ============================================ */
 
@@ -4073,4 +4092,9 @@ input:checked + .slider:before {
         font-size: 1.1rem;
         padding: 0.625rem;
     }
+}
+
+/* Show edit-only buttons when in edit mode */
+body.edit-mode-active .edit-only.hidden {
+    display: inline-flex !important;
 }

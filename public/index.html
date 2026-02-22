@@ -109,6 +109,7 @@
                 <button id="btn-analytics" class="btn btn-secondary">📊 Analytics</button>
                 <button id="btn-manage-carriers" class="btn btn-secondary">🚛 Carriers</button>
                 <button id="btn-settings" class="btn btn-secondary" title="Display Settings">⚙️ Settings</button>
+                <button id="btn-archives" class="btn btn-secondary edit-only hidden" title="Data Archives">🗄️ Archives</button>
                 <button id="btn-edit-mode" class="btn btn-warning">✏️ Edit</button>
                 <div id="auth-section" class="auth-section">
                     <button id="btn-login" class="btn btn-secondary">🔒 Login</button>
@@ -352,6 +353,9 @@
                 <div id="history-list" class="history-list">
                     <!-- History entries will be rendered here -->
                 </div>
+                <div id="history-load-more" class="history-load-more hidden">
+                    <button id="btn-load-more" class="btn btn-secondary">Load More (showing <span id="history-shown">0</span> of <span id="history-total">0</span>)</button>
+                </div>
                 <div id="history-empty" class="history-empty hidden">No history entries found.</div>
             </div>
         </div>
@@ -441,6 +445,6 @@
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="app.js?v=16"></script>
+    <script src="app.js?v=18"></script>
 </body>
 </html>

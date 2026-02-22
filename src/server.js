@@ -753,6 +753,89 @@ app.post('/api/settings', requireAuth, (req, res) => {
   res.json({ success: true, settings: newSettings });
 });
 
+// Get list of archive files (protected)
+app.get('/api/archives', requireAuth, (req, res) => {
+  try {
+    const archivesDir = path.join(DATA_DIR, 'archives');
+    if (!fs.existsSync(archivesDir)) {
+      return res.json({ archives: [] });
+    }
+    const files = fs.readdirSync(archivesDir)
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        const stats = fs.statSync(path.join(archivesDir, f));
+        return {
+          name: f,
+          size: stats.size,
+          created: stats.birthtime
+        };
+      })
+      .sort((a, b) => new Date(b.created) - new Date(a.created));
+    res.json({ archives: files });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create archive snapshot (protected)
+app.post('/api/archives', requireAuth, (req, res) => {
+  try {
+    const state = loadState();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `archive-${timestamp}.json`;
+    const archivesDir = path.join(DATA_DIR, 'archives');
+
+    if (!fs.existsSync(archivesDir)) {
+      fs.mkdirSync(archivesDir, { recursive: true });
+    }
+
+    const archivePath = path.join(archivesDir, filename);
+    fs.writeFileSync(archivePath, JSON.stringify(state, null, 2));
+
+    res.json({ success: true, filename });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Download archive file (protected)
+app.get('/api/archives/:filename', requireAuth, (req, res) => {
+  try {
+    const { filename } = req.params;
+    // Security: only allow .json files and prevent directory traversal
+    if (!filename.endsWith('.json') || filename.includes('..') || filename.includes('/')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    const archivePath = path.join(DATA_DIR, 'archives', filename);
+    if (!fs.existsSync(archivePath)) {
+      return res.status(404).json({ error: 'Archive not found' });
+    }
+    res.download(archivePath);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Download archive file (protected)
+app.get('/api/archives/:filename', requireAuth, (req, res) => {
+  try {
+    const filename = req.params.filename;
+    // Sanitize filename to prevent directory traversal
+    if (!filename.match(/^[\w\-]+\.json$/)) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    const filePath = path.join(DATA_DIR, 'archives', filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/json');
+    fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Get current state (protected)
