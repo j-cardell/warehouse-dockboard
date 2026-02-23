@@ -157,38 +157,6 @@ After setup, you see the main dock board interface with three primary zones:
 - **FCFS Queue**: Trailers waiting for specific doors (first-come-first-served)
 - **Appointment Queue**: Scheduled arrivals with check-in functionality
 
-#### Step 4: Your First Trailer (Walkthrough)
-
-Try this complete workflow:
-
-1. **Create a trailer**:
-   - Click **"➕ Add Trailer"** (top left)
-   - Enter: Number="TR1001", Carrier="FedEx", Status="Loaded"
-   - Select Location: "Yard" → Slot 1
-   - Click **Create**
-   - The trailer appears in Yard Slot 1
-
-2. **Move to a door**:
-   - Click and hold on the trailer card
-   - Drag it to Door 1 (or your first door)
-   - Release to drop
-   - The trailer moves to the door, history is logged
-
-3. **Update status**:
-   - Click the **📦 Loaded** badge on the trailer
-   - It toggles to **📭 Empty**
-
-4. **Ship the trailer**:
-   - Click the **⋮** menu on the trailer card
-   - Select **"📤 Ship Trailer"**
-   - Confirm the action
-   - Trailer moves to shipped archive, door becomes empty
-
-5. **View history**:
-   - Click **"📜 History"** button
-   - See all actions: creation, moves, status changes, shipping
-   - Use **"Load More"** to view older entries
-
 ### Daily Operation Workflows
 
 #### Morning Startup
