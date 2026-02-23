@@ -2496,6 +2496,7 @@ function renderDoors() {
   for (const door of sortedDoors) {
     const trailer = door?.trailerId ? state.trailers.find(t => t.id === door.trailerId && t.location !== 'shipped') : null;
     const doorNum = door.number;
+    const digitCount = String(doorNum).length;
     const hasTextLabel = door.labelText && door.labelText.trim();
     const displayLabel = hasTextLabel ? door.labelText : `Door ${doorNum}`;
     const textLabelClass = hasTextLabel ? 'has-text-label' : '';
@@ -2527,7 +2528,7 @@ function renderDoors() {
     // Out of service door
     if (door.inService === false) {
       html += `
-        <div class="dock-door out-of-service ${highlightClass} ${searchClass} ${textLabelClass} ${editMode ? 'door-draggable' : ''}" data-door="${doorNum}" data-door-id="${door.id}" ${editMode ? 'draggable="true"' : ''}>
+        <div class="dock-door out-of-service ${highlightClass} ${searchClass} ${textLabelClass} ${editMode ? 'door-draggable' : ''}" data-door="${doorNum}" data-digits="${digitCount}" data-door-id="${door.id}" ${editMode ? 'draggable="true"' : ''}>
           <div class="door-header">
             <span class="door-number">${displayLabel}</span>
             <span class="badge">🔧 Out of Service</span>
@@ -2544,7 +2545,7 @@ function renderDoors() {
     // Blank/dummy door (spacer)
     if (door.type === 'blank') {
       html += `
-        <div class="dock-door blank ${highlightClass} ${searchClass} ${textLabelClass} ${editMode ? 'door-draggable' : ''}" data-door="${doorNum}" data-door-id="${door.id}" ${editMode ? 'draggable="true"' : ''}>
+        <div class="dock-door blank ${highlightClass} ${searchClass} ${textLabelClass} ${editMode ? 'door-draggable' : ''}" data-door="${doorNum}" data-digits="${digitCount}" data-door-id="${door.id}" ${editMode ? 'draggable="true"' : ''}>
           <div class="door-header">
             <span class="door-number">${displayLabel}</span>
             <span class="door-status">Blank</span>
@@ -2581,7 +2582,7 @@ function renderDoors() {
         `<span class="door-queue-indicator clickable-queue" data-door-id="${door.id}" title="${queueCount} trailer(s) queued. Click to view next.">⏳ ${queueCount}</span>` : '';
 
       html += `
-        <div class="dock-door occupied ${highlightClass} ${statusClass} ${searchClass} ${dwellClass} ${textLabelClass} ${editMode ? 'door-draggable' : ''}" data-door="${doorNum}" data-door-id="${door.id}" ${editMode ? 'draggable="true"' : ''}>
+        <div class="dock-door occupied ${highlightClass} ${statusClass} ${searchClass} ${dwellClass} ${textLabelClass} ${editMode ? 'door-draggable' : ''}" data-door="${doorNum}" data-digits="${digitCount}" data-door-id="${door.id}" ${editMode ? 'draggable="true"' : ''}>
           <div class="door-header">
             <span class="door-number">${displayLabel}</span>
             ${queueIndicator}
@@ -2613,7 +2614,7 @@ function renderDoors() {
         : (editMode ? `<span class="placeholder-text">Drag to reorder</span>` : `<button class="quick-add-btn" data-door="${door.number}">+ Add</button>`);
       
       html += `
-        <div class="dock-door empty ${highlightClass} ${searchClass} ${textLabelClass} ${editMode ? 'door-draggable' : ''}" data-door="${doorNum}" data-door-id="${door.id}" ${editMode ? 'draggable="true"' : ''}>
+        <div class="dock-door empty ${highlightClass} ${searchClass} ${textLabelClass} ${editMode ? 'door-draggable' : ''}" data-door="${doorNum}" data-digits="${digitCount}" data-door-id="${door.id}" ${editMode ? 'draggable="true"' : ''}>
           <div class="door-header">
             <span class="door-number">${displayLabel}</span>
             <span class="door-status">Empty</span>

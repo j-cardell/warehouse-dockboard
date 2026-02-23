@@ -732,6 +732,19 @@ body.edit-mode-active .resize-handle-vertical.active {
     line-height: 1;
 }
 
+/* Scale background numbers for multi-digit doors */
+.dock-door[data-digits="3"]::before {
+    font-size: 55cqw;
+}
+
+.dock-door[data-digits="4"]::before {
+    font-size: 42cqw;
+}
+
+.dock-door[data-digits="5"]::before {
+    font-size: 34cqw;
+}
+
 .dock-door.highlighted::before {
     color: #60a5fa;
     opacity: 0.65;
