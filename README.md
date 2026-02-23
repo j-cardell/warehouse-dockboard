@@ -710,7 +710,7 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ## 📞 Support
 
-For issues and feature requests, please use the [GitHub Issues](https://github.com/yourusername/warehouse-dockboard/issues) page.
+For issues and feature requests, please use the [GitHub Issues](https://github.com/j-cardell/warehouse-dockboard/issues) page.
 
 ---
 
