@@ -10,17 +10,17 @@ A real-time dock management application for warehouses, distribution centers, an
 
 ## 📋 Table of Contents
 
-- [Features](#features)
-- [Screenshots](#screenshots)
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Architecture](#architecture)
-- [API Documentation](#api-documentation)
-- [Security](#security)
-- [Contributing](#contributing)
-- [License](#license)
+- [Features](#-features)
+- [Screenshots](#-screenshots)
+- [Quick Start](#-quick-start)
+- [Installation](#-installation)
+- [Configuration](#-configuration)
+- [Usage](#-usage)
+- [Architecture](#-architecture)
+- [API Documentation](#-api-documentation)
+- [Security](#-security)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
