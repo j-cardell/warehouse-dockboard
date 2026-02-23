@@ -56,10 +56,13 @@ A real-time dock management application for warehouses, distribution centers, an
 ## 📸 Screenshots
 
 *Main dashboard showing dock doors, yard slots, and staging area*
+<img width="2304" height="1356" alt="image" src="https://github.com/user-attachments/assets/1e8a98e3-35ba-46fc-905d-d02c7ec3fffd" />
 
 *Movement history with search and date filtering*
+<img width="910" height="1124" alt="image" src="https://github.com/user-attachments/assets/8396fdd0-78ee-4db6-ad1d-6769fd3d68f4" />
 
 *Setup wizard for initial configuration*
+<img width="619" height="693" alt="image" src="https://github.com/user-attachments/assets/d42dd6e5-7216-4d45-a54f-67fb27c18239" />
 
 ---
 
