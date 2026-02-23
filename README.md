@@ -135,7 +135,7 @@ After first login, the setup wizard appears automatically. This one-time configu
 
 After setup, you see the main dock board interface with three primary zones:
 
-**Top Section - Dock Doors**
+**Dock Doors**
 - Grid layout showing all configured doors
 - Empty doors show large background numbers
 - Occupied doors display trailer cards with:
@@ -144,16 +144,16 @@ After setup, you see the main dock board interface with three primary zones:
   - Status badge (📦 Loaded / 📭 Empty)
   - Dwell time (⏱️ hours:minutes)
 
-**Middle Section - Staging Area**
+**Staging Area**
 - Pre-door holding area for trailers awaiting assignment
 - Drag trailers here when they're checked in but not ready for a door
 
-**Bottom Section - Yard Slots**
+**Yard Slots**
 - Numbered grid matching your configuration
 - Shows current occupancy status
 - Click "+ Add" to create trailers directly in yard
 
-**Right Side - Queues**
+**Queues**
 - **FCFS Queue**: Trailers waiting for specific doors (first-come-first-served)
 - **Appointment Queue**: Scheduled arrivals with check-in functionality
 
