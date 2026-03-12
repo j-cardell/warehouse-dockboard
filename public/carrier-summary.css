@@ -1,0 +1,104 @@
+/* Carrier Summary Bar */
+.carrier-summary {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.5rem;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+}
+
+.summary-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.carrier-list {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.carrier-summary-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.carrier-summary-item:hover {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+}
+
+.carrier-summary-item.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+.carrier-summary-item .carrier-name {
+    font-weight: 500;
+}
+
+.carrier-summary-item .door-list {
+    font-size: 0.75rem;
+    opacity: 0.9;
+}
+
+.carrier-summary-item .door-list::before {
+    content: "• ";
+}
+
+.no-carriers {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.875rem;
+}
+
+/* Status-colored location numbers in carrier summary */
+.carrier-summary-item .loc-num {
+    font-weight: 700;
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+}
+
+.carrier-summary-item .loc-num.loaded {
+    color: #10b981; /* green */
+    background: rgba(16, 185, 129, 0.15);
+}
+
+.carrier-summary-item .loc-num.empty {
+    color: #f59e0b; /* orange */
+    background: rgba(245, 158, 11, 0.15);
+}
+
+/* Door highlighting when carrier filter active */
+.dock-door.highlighted {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+    animation: pulse 2s infinite;
+}
+
+.dock-door.dimmed {
+    opacity: 0.4;
+}
+
+@keyframes pulse {
+    0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
+    50% { box-shadow: 0 0 25px rgba(59, 130, 246, 0.6); }
+}

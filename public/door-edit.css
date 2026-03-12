@@ -1,0 +1,144 @@
+/* Door Edit Mode Styles */
+.dock-door.out-of-service {
+    background: repeating-linear-gradient(
+        45deg,
+        rgba(51, 65, 85, 0.5),
+        rgba(51, 65, 85, 0.5) 10px,
+        rgba(71, 85, 105, 0.5) 10px,
+        rgba(71, 85, 105, 0.5) 20px
+    );
+    border-color: #64748b;
+    border-style: dashed;
+    opacity: 0.8;
+}
+
+.dock-door.out-of-service .door-number {
+    color: #94a3b8;
+    text-decoration: line-through;
+}
+
+.out-of-service-text {
+    color: #64748b;
+    font-size: 0.875rem;
+    font-style: italic;
+}
+
+.dock-door.blank {
+    background: transparent;
+    border: 2px dashed var(--border-color);
+    opacity: 0.5;
+}
+
+.dock-door.blank .blank-text {
+    color: var(--text-muted);
+    font-size: 2rem;
+    font-weight: 300;
+}
+
+/* Edit mode buttons */
+.door-edit-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(59, 130, 246, 0.8);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 10;
+}
+
+.dock-door:hover .door-edit-btn {
+    opacity: 1;
+}
+
+.door-edit-btn:hover {
+    background: var(--accent-primary);
+}
+
+/* Trailer delete button - always visible on cards */
+.delete-trailer-btn {
+    background: rgba(239, 68, 68, 0.6);
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 2px 4px;
+    font-size: 0.65rem;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s, background 0.2s;
+    margin-left: auto;
+}
+
+.delete-trailer-btn:hover {
+    background: var(--danger);
+    opacity: 1;
+}
+
+/* Add Door card */
+.add-door-card {
+    background: rgba(16, 185, 129, 0.1);
+    border: 2px dashed var(--success);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.add-door-card:hover {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: var(--success);
+}
+
+.add-door-text {
+    color: var(--success);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+/* Edit Mode Toggle Button */
+.edit-mode-btn {
+    background: var(--warning);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.edit-mode-btn:hover {
+    background: #d97706;
+}
+
+.edit-mode-btn.active {
+    background: var(--danger);
+    animation: pulse-danger 2s infinite;
+}
+
+@keyframes pulse-danger {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+}
+
+/* Enhanced Carrier Summary with Status */
+.carrier-summary-item .status-indicator {
+    display: inline-flex;
+    gap: 0.25rem;
+    margin-left: 0.25rem;
+}
+
+.carrier-summary-item .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.carrier-summary-item .status-dot.loaded {
+    background: var(--success);
+}
+
+.carrier-summary-item .status-dot.empty {
+    background: var(--warning);
+}
