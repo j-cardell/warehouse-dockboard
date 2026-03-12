@@ -50,6 +50,9 @@
             </div>
             
             <div id="tab-create" style="padding:2rem; background:var(--bg-tertiary); border-radius:0 0 8px 8px;">
+                <div id="create-facility-info" style="margin-bottom:1rem; padding:0.75rem; background:var(--bg-primary); border-radius:var(--radius-md); border-left:4px solid var(--success);">
+                    <strong>Current Facility:</strong> <span id="create-facility-name">Loading...</span>
+                </div>
                 <div style="text-align:center; padding:2rem; margin-bottom:1.5rem; border-bottom:1px solid var(--border-color);">
                     <p style="margin-bottom:1.5rem; color:var(--text-secondary);">Create a snapshot of current data as a backup.</p>
                     <button class="btn btn-primary btn-large" onclick="createArchive()">📦 Create Archive Now</button>
@@ -70,6 +73,9 @@
             </div>
             
             <div id="tab-browse" style="display:none; padding:2rem; background:var(--bg-tertiary); border-radius:0 0 8px 8px;">
+                <div id="current-facility-info" style="margin-bottom:1rem; padding:0.75rem; background:var(--bg-primary); border-radius:var(--radius-md); border-left:4px solid var(--info);">
+                    <strong>Current Facility:</strong> <span id="facility-name-display">Loading...</span>
+                </div>
                 <div id="file-list">Loading...</div>
             </div>
         </div>
@@ -87,17 +93,34 @@
             try {
                 const res = await fetch('/api/archives', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token') } });
                 const data = await res.json();
-                document.getElementById('file-list').innerHTML = data.archives.map(f =>
-                    `<div style="padding:10px; border-bottom:1px solid #444; display:flex; justify-content:space-between; align-items:center;">
-                        <span>${f.name}</span>
-                        <div>
-                            <span style="margin-right:1rem; color:var(--text-muted);">${(f.size/1024).toFixed(1)} KB</span>
-                            <button class="btn btn-small btn-secondary" onclick="downloadArchive('${f.name}')">Download</button>
+
+                // Update current facility display
+                document.getElementById('facility-name-display').textContent = data.facilityName || 'Unknown Facility';
+
+                if (data.archives.length === 0) {
+                    document.getElementById('file-list').innerHTML = '<p style="color:var(--text-muted); padding:2rem; text-align:center;">No archives found for this facility.</p>';
+                    return;
+                }
+
+                document.getElementById('file-list').innerHTML = data.archives.map(f => {
+                    const date = new Date(f.created).toLocaleString();
+                    const facilityBadge = f.facilityName
+                        ? `<span style="background:var(--info); color:white; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:0.5rem;">${f.facilityName}</span>`
+                        : '<span style="background:var(--text-muted); color:white; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:0.5rem;">Legacy</span>';
+
+                    return `<div style="padding:12px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                        <div style="display:flex; flex-direction:column; gap:0.25rem;">
+                            <div style="display:flex; align-items:center; gap:0.5rem;">
+                                ${facilityBadge}
+                                <span style="font-weight:500;">${f.name}</span>
+                            </div>
+                            <span style="color:var(--text-muted); font-size:0.8rem;">${date} • ${(f.size/1024).toFixed(1)} KB</span>
                         </div>
-                     </div>`
-                ).join('') || '<p style="color:var(--text-muted)">No archives yet.</p>';
+                        <button class="btn btn-small btn-secondary" onclick="downloadArchive('${f.name}')">Download</button>
+                     </div>`;
+                }).join('');
             } catch (e) {
-                document.getElementById('file-list').innerHTML = 'Error: ' + e.message;
+                document.getElementById('file-list').innerHTML = '<p style="color:var(--danger); padding:2rem;">Error: ' + e.message + '</p>';
             }
         }
 
@@ -115,7 +138,10 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    result.innerHTML = `<p style="color:var(--success)">✅ Archive created: ${data.filename}</p>`;
+                    const facilityInfo = data.facilityName
+                        ? `<br><small style="color:var(--text-muted)">📍 Facility: ${data.facilityName}</small>`
+                        : '';
+                    result.innerHTML = `<p style="color:var(--success)">✅ Archive created: ${data.filename}${facilityInfo}</p>`;
                 } else {
                     throw new Error(data.error || 'Failed to create archive');
                 }
@@ -213,7 +239,28 @@
         });
 
         // Check auth on page load
-        checkAuth();
+        checkAuth().then(() => {
+            // Load current facility info for display
+            loadCurrentFacilityInfo();
+        });
+
+        // Load current facility info
+        async function loadCurrentFacilityInfo() {
+            try {
+                const token = localStorage.getItem('dockboard_token');
+                const res = await fetch('/api/auth/status', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+
+                if (data.authenticated && data.user) {
+                    const facilityName = data.user.currentFacilityName || data.user.homeFacilityName || 'Unknown Facility';
+                    document.getElementById('create-facility-name').textContent = facilityName;
+                }
+            } catch (e) {
+                console.error('Failed to load facility info:', e);
+            }
+        }
 
         // Archive upload handler
         async function handleArchiveUpload(input) {
@@ -233,45 +280,101 @@
                     throw new Error('Invalid JSON file');
                 }
 
-                // Confirm restore
-                if (!confirm(`⚠️ WARNING: This will overwrite ALL current data!\n\nFile: ${file.name}\nSize: ${(file.size/1024).toFixed(1)} KB\n\nContinue with restore?`)) {
+                // Extract facility info from archive metadata
+                const sourceFacilityId = data._archiveMetadata?.facilityId;
+                const sourceFacilityName = data._archiveMetadata?.facilityName || 'Unknown Facility';
+                const archiveCreatedAt = data._archiveMetadata?.createdAt;
+                const hasMetadata = !!data._archiveMetadata;
+
+                // Show initial confirmation with facility info
+                let confirmMessage = `⚠️ WARNING: This will overwrite ALL current data!\n\n`;
+                confirmMessage += `File: ${file.name}\n`;
+                confirmMessage += `Size: ${(file.size/1024).toFixed(1)} KB\n\n`;
+
+                if (hasMetadata) {
+                    confirmMessage += `📍 Source Facility: ${sourceFacilityName}\n`;
+                    if (archiveCreatedAt) {
+                        confirmMessage += `📅 Created: ${new Date(archiveCreatedAt).toLocaleString()}\n`;
+                    }
+                    confirmMessage += `\n`;
+                } else {
+                    confirmMessage += `⚠️ Legacy archive (no facility info)\n\n`;
+                }
+
+                confirmMessage += `Continue with restore?`;
+
+                if (!confirm(confirmMessage)) {
                     resultDiv.innerHTML = '';
                     input.value = '';
                     return;
                 }
 
-                resultDiv.innerHTML = '<p style="color:var(--text-secondary)">Validating and restoring...</p>';
-
-                // Send to server
-                const res = await fetch('/api/archives/restore', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token'),
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                const result = await res.json();
-
-                if (result.success) {
-                    resultDiv.innerHTML = `
-                        <div style="color:#4ade80; margin-top:1rem;">
-                            ✅ Restore successful!<br>
-                            Doors: ${result.doorsRestored}<br>
-                            Trailers: ${result.trailersRestored}<br>
-                            Yard Slots: ${result.yardSlotsRestored}<br>
-                            <small>Backup created: ${result.backupFile}</small>
-                        </div>`;
-                    // Reload page after 2 seconds
-                    setTimeout(() => window.location.reload(), 2000);
-                } else {
-                    throw new Error(result.error || 'Restore failed');
-                }
+                await performRestore(data, false);
             } catch (e) {
                 resultDiv.innerHTML = `<p style="color:#ef4444;">❌ Error: ${e.message}</p>`;
             } finally {
                 input.value = '';
+            }
+        }
+
+        // Perform restore with optional confirmation for cross-facility
+        async function performRestore(data, confirmed = false) {
+            const resultDiv = document.getElementById('upload-result');
+            resultDiv.innerHTML = '<p style="color:var(--text-secondary)">Validating and restoring...</p>';
+
+            // Build request body
+            const requestBody = confirmed ? { ...data, confirmed: true } : data;
+
+            // Send to server
+            const res = await fetch('/api/archives/restore', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token'),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            const result = await res.json();
+
+            // Handle cross-facility warning (409)
+            if (res.status === 409 && result.requiresConfirmation && result.warning) {
+                const warning = result.warning;
+                const crossFacilityMessage =
+                    `⚠️ CROSS-FACILITY RESTORE WARNING\n\n` +
+                    `This archive is from a different facility:\n` +
+                    `📍 Source: ${warning.sourceFacilityName}\n` +
+                    `📍 Target: ${warning.targetFacilityName || 'Current Facility'}\n\n` +
+                    `Are you sure you want to restore this data to your current facility?\n` +
+                    `This will overwrite all existing data!`;
+
+                if (confirm(crossFacilityMessage)) {
+                    // Retry with confirmed flag
+                    await performRestore(data, true);
+                } else {
+                    resultDiv.innerHTML = '<p style="color:var(--text-muted);">Restore cancelled.</p>';
+                }
+                return;
+            }
+
+            if (result.success) {
+                const sourceInfo = result.sourceFacilityName
+                    ? `<br><small>📍 Source: ${result.sourceFacilityName}</small>`
+                    : '';
+
+                resultDiv.innerHTML = `
+                    <div style="color:#4ade80; margin-top:1rem;">
+                        ✅ Restore successful!<br>
+                        Doors: ${result.doors}<br>
+                        Trailers: ${result.trailers}<br>
+                        Yard Slots: ${result.yardSlots}<br>
+                        <small>Backup created: ${result.backupCreated}</small>
+                        ${sourceInfo}
+                    </div>`;
+                // Reload page after 2 seconds
+                setTimeout(() => window.location.reload(), 2000);
+            } else {
+                throw new Error(result.error || 'Restore failed');
             }
         }
     </script>

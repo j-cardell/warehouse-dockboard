@@ -339,6 +339,11 @@ router.get("/status", (req, res) => {
       availableFacilities = getAllFacilities();
     }
 
+    // Get facility names for display
+    const { getFacility } = require("../facilities");
+    const currentFacilityObj = getFacility(facilityId);
+    const homeFacilityObj = getFacility(decoded.homeFacility || user.homeFacility || facilityId);
+
     return res.json({
       authenticated: true,
       user: {
@@ -346,7 +351,9 @@ router.get("/status", (req, res) => {
         username: user.username,
         role: user.role,
         homeFacility: decoded.homeFacility || user.homeFacility || facilityId,
+        homeFacilityName: homeFacilityObj?.name || "Unknown Facility",
         currentFacility: facilityId,
+        currentFacilityName: currentFacilityObj?.name || "Unknown Facility",
         isBootstrap: decoded.isBootstrap || isBootstrapAdmin(user),
         isVisiting: decoded.isVisiting || false,
       },

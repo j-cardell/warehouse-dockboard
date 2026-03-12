@@ -25,23 +25,56 @@ const { loadState, saveState, addHistoryEntry } = require("../state");
 // Get list of archive files (protected)
 router.get("/", requireAuth, (req, res) => {
   try {
+    const facilityId = req.user.currentFacility || req.user.homeFacility;
     const archivesDir = path.join(DATA_DIR, "archives");
     if (!fs.existsSync(archivesDir)) {
-      return res.json({ archives: [] });
+      return res.json({ archives: [], facilityId });
     }
+
+    // Get facility name for display
+    const { getFacility } = require("../facilities");
+    const currentFacility = getFacility(facilityId);
+
     const files = fs
       .readdirSync(archivesDir)
       .filter((f) => f.endsWith(".json"))
       .map((f) => {
-        const stats = fs.statSync(path.join(archivesDir, f));
+        const filePath = path.join(archivesDir, f);
+        const stats = fs.statSync(filePath);
+
+        // Try to read metadata from archive
+        let archiveFacilityId = null;
+        let archiveFacilityName = null;
+        try {
+          const content = fs.readFileSync(filePath, "utf8");
+          const data = JSON.parse(content);
+          if (data._archiveMetadata) {
+            archiveFacilityId = data._archiveMetadata.facilityId;
+            archiveFacilityName = data._archiveMetadata.facilityName;
+          }
+        } catch (e) {
+          // Legacy archive without metadata
+        }
+
         return {
           name: f,
           size: stats.size,
           created: stats.birthtime,
+          facilityId: archiveFacilityId,
+          facilityName: archiveFacilityName,
+          // Include archives that match current facility or have no metadata (legacy)
+          isForCurrentFacility: !archiveFacilityId || archiveFacilityId === facilityId,
         };
       })
+      // Filter to only show archives for current facility (or legacy archives)
+      .filter((f) => f.isForCurrentFacility)
       .sort((a, b) => new Date(b.created) - new Date(a.created));
-    res.json({ archives: files });
+
+    res.json({
+      archives: files,
+      facilityId,
+      facilityName: currentFacility?.name || "Unknown Facility",
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -52,18 +85,35 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
   try {
     const facilityId = req.user.currentFacility || req.user.homeFacility;
     const state = loadState(facilityId);
+
+    // Get facility info for metadata
+    const { getFacility } = require("../facilities");
+    const facility = getFacility(facilityId);
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `archive-${timestamp}.json`;
+    const filename = `archive-${facilityId}-${timestamp}.json`;
     const archivesDir = path.join(DATA_DIR, "archives");
 
     if (!fs.existsSync(archivesDir)) {
       fs.mkdirSync(archivesDir, { recursive: true });
     }
 
-    const archivePath = path.join(archivesDir, filename);
-    fs.writeFileSync(archivePath, JSON.stringify(state, null, 2));
+    // Create archive with metadata wrapper
+    const archiveData = {
+      _archiveMetadata: {
+        version: "1.0",
+        createdAt: new Date().toISOString(),
+        facilityId: facilityId,
+        facilityName: facility?.name || "Unknown Facility",
+        createdBy: req.user.username,
+      },
+      ...state,
+    };
 
-    res.json({ success: true, filename });
+    const archivePath = path.join(archivesDir, filename);
+    fs.writeFileSync(archivePath, JSON.stringify(archiveData, null, 2));
+
+    res.json({ success: true, filename, facilityId, facilityName: facility?.name });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -324,7 +374,9 @@ function sanitizeArchiveData(data) {
 // Upload and restore from archive (protected)
 router.post("/restore", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const facilityId = req.user.currentFacility || req.user.homeFacility;
+    const targetFacilityId = req.user.currentFacility || req.user.homeFacility;
+    const { confirmed } = req.body;
+
     // Accept either { data: {...} } or direct {...}
     const data = req.body.data || req.body;
 
@@ -332,8 +384,36 @@ router.post("/restore", requireAuth, requireRole("admin"), async (req, res) => {
       return res.status(400).json({ error: "No data provided" });
     }
 
+    // Extract metadata if present
+    const sourceFacilityId = data._archiveMetadata?.facilityId;
+    const sourceFacilityName = data._archiveMetadata?.facilityName || "Unknown Facility";
+    const archiveCreatedAt = data._archiveMetadata?.createdAt;
+
+    // Check if this is a cross-facility restore
+    const isCrossFacility = sourceFacilityId && sourceFacilityId !== targetFacilityId;
+
+    // If cross-facility and not confirmed, return warning
+    if (isCrossFacility && !confirmed) {
+      return res.status(409).json({
+        error: "Cross-facility restore requires confirmation",
+        warning: {
+          type: "cross-facility",
+          sourceFacilityId,
+          sourceFacilityName,
+          targetFacilityId,
+          targetFacilityName: req.user.facilityName || "Current Facility",
+          message: `This archive is from "${sourceFacilityName}" (${sourceFacilityId}). Are you sure you want to restore it to your current facility?`,
+        },
+        requiresConfirmation: true,
+      });
+    }
+
+    // Remove metadata wrapper before validation
+    const stateData = { ...data };
+    delete stateData._archiveMetadata;
+
     // Validate structure
-    const validation = validateArchiveData(data);
+    const validation = validateArchiveData(stateData);
     if (!validation.valid) {
       return res
         .status(400)
@@ -341,25 +421,55 @@ router.post("/restore", requireAuth, requireRole("admin"), async (req, res) => {
     }
 
     // Sanitize the data
-    const sanitizedData = sanitizeArchiveData(data);
+    const sanitizedData = sanitizeArchiveData(stateData);
 
     // Create backup of current state before restore
-    const currentState = loadState(facilityId);
+    const { getFacility } = require("../facilities");
+    const currentFacility = getFacility(targetFacilityId);
+    const currentState = loadState(targetFacilityId);
     const backupTimestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const backupPath = path.join(
       DATA_DIR,
       "archives",
-      `auto-backup-before-restore-${backupTimestamp}.json`,
+      `auto-backup-before-restore-${targetFacilityId}-${backupTimestamp}.json`,
     );
-    fs.writeFileSync(backupPath, JSON.stringify(currentState, null, 2));
 
-    // Save sanitized state
-    fs.writeFileSync(STATE_FILE, JSON.stringify(sanitizedData, null, 2));
+    const backupData = {
+      _archiveMetadata: {
+        version: "1.0",
+        createdAt: new Date().toISOString(),
+        facilityId: targetFacilityId,
+        facilityName: currentFacility?.name || "Unknown Facility",
+        createdBy: req.user.username,
+        note: "Auto-created before restore",
+      },
+      ...currentState,
+    };
+    fs.writeFileSync(backupPath, JSON.stringify(backupData, null, 2));
+
+    // Save sanitized state to target facility
+    saveState(sanitizedData, targetFacilityId);
+
+    // Add history entry for the restore
+    const { addHistoryEntry } = require("../state");
+    addHistoryEntry(
+      "RESTORE_FROM_ARCHIVE",
+      {
+        sourceFacilityId: sourceFacilityId || "unknown",
+        sourceFacilityName,
+        targetFacilityId,
+        archiveCreatedAt,
+      },
+      req.user,
+      targetFacilityId,
+    );
 
     res.json({
       success: true,
       message: "State restored successfully",
       backupCreated: path.basename(backupPath),
+      sourceFacilityId,
+      sourceFacilityName,
       doors: sanitizedData.doors.length,
       trailers: sanitizedData.trailers.length,
       yardSlots: sanitizedData.yardSlots.length,
