@@ -236,6 +236,9 @@ router.post("/login", loginLimiter, async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
+    // Use first available facility as default for bootstrap user
+    const defaultFacility = availableFacilities.length > 0 ? availableFacilities[0].id : null;
+
     return res.json({
       success: true,
       token: tempToken,
@@ -244,6 +247,8 @@ router.post("/login", loginLimiter, async (req, res) => {
         username: user.username,
         role: user.role,
         isBootstrap: true,
+        homeFacility: defaultFacility,
+        currentFacility: defaultFacility,
       },
       availableFacilities,
       multiFacilityMode: MULTI_FACILITY_MODE,

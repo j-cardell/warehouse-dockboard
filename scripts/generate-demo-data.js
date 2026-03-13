@@ -202,7 +202,7 @@ async function main() {
     targetDoor.status = trailer.status;
     historyEntries.push(
       createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, timestamp: trailer.createdAt }),
-      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, doorNumber: doorNum, timestamp: new Date(new Date(trailer.createdAt).getTime() + 1000).toISOString() })
+      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, driverName: trailer.driverName, loadNumber: trailer.loadNumber, doorNumber: doorNum, timestamp: new Date(new Date(trailer.createdAt).getTime() + 1000).toISOString() })
     );
   }
 
@@ -216,7 +216,7 @@ async function main() {
     state.shippedTrailers.push(trailer);
     historyEntries.push(
       createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, timestamp: trailer.createdAt }),
-      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, doorNumber: trailer.previousLocation?.replace('Door ', '') || Math.floor(Math.random() * DOOR_COUNT) + 1, timestamp: new Date(new Date(trailer.createdAt).getTime() + 60000).toISOString() }),
+      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, driverName: trailer.driverName, loadNumber: trailer.loadNumber, doorNumber: trailer.previousLocation?.replace('Door ', '') || Math.floor(Math.random() * DOOR_COUNT) + 1, timestamp: new Date(new Date(trailer.createdAt).getTime() + 60000).toISOString() }),
       createHistoryEntry('TRAILER_SHIPPED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, from: trailer.previousLocation, to: 'Shipped', timestamp: trailer.shippedAt })
     );
   }
@@ -245,9 +245,11 @@ async function main() {
       const trailerId = uuidv4();
       const trailerNumber = 'TR' + (Math.floor(Math.random() * 900000) + 100000);
       const customer = Math.random() > 0.5 ? randomItem(CUSTOMERS) : null;
+      const driverName = Math.random() > 0.3 ? 'Driver ' + Math.floor(Math.random() * 100) : null;
+      const loadNumber = Math.random() > 0.5 ? 'LD' + (Math.floor(Math.random() * 9000000) + 1000000) : null;
       historyEntries.push(
         createHistoryEntry('TRAILER_CREATED', { trailerId, trailerNumber, carrier, customer, timestamp: createdAt }),
-        createHistoryEntry('MOVED_TO_DOOR', { trailerId, trailerNumber, carrier, customer, doorNumber: doorNum, timestamp: new Date(new Date(createdAt).getTime() + 60000).toISOString() })
+        createHistoryEntry('MOVED_TO_DOOR', { trailerId, trailerNumber, carrier, customer, driverName, loadNumber, doorNumber: doorNum, timestamp: new Date(new Date(createdAt).getTime() + 60000).toISOString() })
       );
       const action = Math.random() > 0.3 ? 'TRAILER_SHIPPED' : 'MOVED_TO_YARD';
       historyEntries.push(createHistoryEntry(action, { trailerId, trailerNumber, carrier, customer, from: 'Door ' + doorNum, to: action === 'TRAILER_SHIPPED' ? 'Shipped' : 'Yard', doorNumber: doorNum, timestamp: departedTime.toISOString() }));

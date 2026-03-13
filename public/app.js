@@ -2254,19 +2254,10 @@ async function showAnalyticsModal() {
           <span id="analytics-facility-info" style="margin-left: 1rem; font-size: 0.875rem; color: var(--text-secondary);"></span>
         </div>
         <div class="analytics-tabs">
-          <button class="analytics-tab active" data-view="dwell">Avg Dwell Time</button>
-          <button class="analytics-tab" data-view="violations">2+ Hour Violations</button>
+          <button class="analytics-tab active" data-view="violations">2+ Hour Violations</button>
           <button class="analytics-tab" data-view="patterns">Position Patterns</button>
         </div>
-        <div class="analytics-subtabs" id="dwell-tabs">
-          <button class="analytics-subtab active" data-period="day">Daily (7 days)</button>
-          <button class="analytics-subtab" data-period="week">Weekly (4 weeks)</button>
-          <button class="analytics-subtab" data-period="month">Monthly (3 months)</button>
-        </div>
-        <div class="analytics-chart-container" id="chart-container">
-          <canvas id="analytics-chart" width="800" height="400"></canvas>
-        </div>
-        <div class="analytics-violations hidden" id="violations-container">
+        <div class="analytics-violations" id="violations-container">
           <div class="violations-header">
             <h4>Current Trailers Exceeding 2 Hours</h4>
             <span class="violations-count" id="current-violation-count">0</span>
@@ -2329,25 +2320,6 @@ async function showAnalyticsModal() {
             <h4>Top Carrier/Customer Combinations</h4>
             <div class="patterns-list" id="patterns-list"></div>
           </div>
-        </div>
-        <div class="analytics-summary" id="dwell-summary">
-          <div class="summary-stat">
-            <span class="stat-label">Avg Dwell Time</span>
-            <span id="avg-dwell" class="stat-value">--</span>
-          </div>
-          <div class="summary-stat">
-            <span class="stat-label">Trailers Tracked</span>
-            <span id="tracked-count" class="stat-value">--</span>
-          </div>
-          <div class="summary-stat">
-            <span class="stat-label">Data Points</span>
-            <span id="data-points" class="stat-value">--</span>
-          </div>
-        </div>
-        <div class="analytics-info" id="dwell-info">
-          <p>📈 <strong>Tracking Method:</strong> Dwell time is calculated from complete movement history. Each trailer's time at dock is measured from arrival (MOVED_TO_DOOR) until departure (MOVED_TO_YARD, shipped, or deleted). Data is recalculated daily from history entries.</p>
-          <p>📊 <strong>Data Accuracy:</strong> Analytics use actual dwell times from history. Daily averages include all trailers with dwell times &gt; 6 hours capped to prevent outliers from skewing statistics. Violation reports show actual uncapped times.</p>
-          <p>🔄 <strong>Dwell Reset:</strong> When you reset a trailer's dwell time in the UI, it clears the dwellResets array and sets createdAt to now. This affects future calculations but historical analytics remain unchanged.</p>
         </div>
       </div>
       <div class="modal-actions">
@@ -2427,23 +2399,8 @@ async function showAnalyticsModal() {
   }
   
   function updateSummary(data) {
-    if (!data || !data.data) return;
-
-    // Calculate weighted average: sum of (avgDwell * count) / total count
-    let totalDwellHours = 0;
-    let totalTracked = 0;
-
-    data.data.forEach(d => {
-      const count = d.count || 0;
-      totalDwellHours += (d.avgDwell || 0) * count;
-      totalTracked += count;
-    });
-
-    const avg = totalTracked > 0 ? (totalDwellHours / totalTracked).toFixed(1) : '--';
-
-    document.getElementById('avg-dwell').textContent = avg === '--' ? '--' : `${avg}h`;
-    document.getElementById('tracked-count').textContent = totalTracked || '--';
-    document.getElementById('data-points').textContent = totalTracked || '--';
+    // Dwell summary removed - no longer used
+    return;
   }
   
   function renderChart(data, period) {
@@ -2563,7 +2520,7 @@ async function showAnalyticsModal() {
   }
   
   // Tab handlers
-  let currentView = 'dwell';
+  let currentView = 'violations';
   
   // Main view tabs (Dwell vs Violations)
   modal.querySelectorAll('.analytics-tab').forEach(tab => {
@@ -2573,26 +2530,13 @@ async function showAnalyticsModal() {
       currentView = tab.dataset.view;
       
       // Hide all views first
-      document.getElementById('chart-container')?.classList.add('hidden');
       document.getElementById('violations-container')?.classList.add('hidden');
       document.getElementById('patterns-container')?.classList.add('hidden');
-      document.getElementById('dwell-summary')?.classList.add('hidden');
-      document.getElementById('dwell-info')?.classList.add('hidden');
-      document.getElementById('dwell-tabs')?.classList.add('hidden');
-      
+
       // Show appropriate view
       const clearBtn = document.getElementById('btn-clear-analytics');
-      
-      if (currentView === 'dwell') {
-        document.getElementById('chart-container')?.classList.remove('hidden');
-        document.getElementById('dwell-summary')?.classList.remove('hidden');
-        document.getElementById('dwell-info')?.classList.remove('hidden');
-        document.getElementById('dwell-tabs')?.classList.remove('hidden');
-        document.getElementById('btn-capture-now')?.classList.remove('hidden');
-        document.getElementById('btn-export-patterns')?.classList.add('hidden');
-        if (clearBtn) clearBtn.textContent = '🗑️ Clear All History';
-        loadAnalytics(currentPeriod);
-      } else if (currentView === 'violations') {
+
+      if (currentView === 'violations') {
         document.getElementById('violations-container')?.classList.remove('hidden');
         document.getElementById('btn-capture-now')?.classList.remove('hidden');
         document.getElementById('btn-export-patterns')?.classList.add('hidden');
@@ -2607,24 +2551,26 @@ async function showAnalyticsModal() {
       }
     });
   });
-  
-  // Dwell period subtabs
-  modal.querySelectorAll('.analytics-subtab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      modal.querySelectorAll('.analytics-subtab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      currentPeriod = tab.dataset.period;
-      loadAnalytics(currentPeriod);
-    });
-  });
-  
+
+  // Initial load for default view (violations)
+  if (currentView === 'violations') {
+    loadViolations();
+  }
+
   // Load violations data
   async function loadViolations() {
     try {
+      // DEBUG: Log facility filter state
+      console.log('[DEBUG loadViolations] currentFacilityFilter:', currentFacilityFilter);
+      console.log('[DEBUG loadViolations] authState.user?.currentFacility:', authState.user?.currentFacility);
+      console.log('[DEBUG loadViolations] authState.availableFacilities:', authState.availableFacilities);
+
       // Build facility filter param
       const facilityParam = currentFacilityFilter !== 'current'
         ? `&facilities=${encodeURIComponent(currentFacilityFilter)}`
         : '';
+
+      console.log('[DEBUG loadViolations] facilityParam:', facilityParam);
 
       // Load current violations
       const currentUrl = facilityParam
@@ -2680,8 +2626,15 @@ async function showAnalyticsModal() {
   let violationsChartDimensions = null;
 
   function renderViolationsChart(data) {
+    console.log('[DEBUG renderViolationsChart] input data:', data);
     const canvas = document.getElementById('violations-chart');
     if (!canvas || !data || data.length === 0) return;
+
+    // Filter out today - only show previous 6 days (historical data)
+    const today = new Date().toISOString().split('T')[0];
+    const historicalData = data.filter(d => d.date !== today);
+    console.log('[DEBUG renderViolationsChart] after filtering today:', historicalData);
+    data = historicalData;
 
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
@@ -2738,11 +2691,18 @@ async function showAnalyticsModal() {
       ctx.fillStyle = d.count > 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(148, 163, 184, 0.3)';
       ctx.fillRect(x, y, barWidth, barHeight);
 
-      // Label
+      // Label (day name)
       ctx.fillStyle = '#94a3b8';
       ctx.font = '11px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(d.label || '', x + barWidth / 2, height - 20);
+      ctx.fillText(d.label || '', x + barWidth / 2, height - 25);
+
+      // Date label (M/D format)
+      const dateObj = new Date(d.date);
+      const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px sans-serif';
+      ctx.fillText(dateStr, x + barWidth / 2, height - 10);
 
       // Count on bar
       if (d.count > 0) {
@@ -2750,6 +2710,7 @@ async function showAnalyticsModal() {
         ctx.font = 'bold 12px sans-serif';
         ctx.fillText(d.count.toString(), x + barWidth / 2, y - 5);
       }
+
     });
 
     // Add click hint
@@ -2772,6 +2733,7 @@ async function showAnalyticsModal() {
       // Check if click is within chart area
       if (clickX < padding.left || clickX > width - padding.right ||
           clickY < padding.top || clickY > height - padding.bottom) {
+        console.log('[DEBUG click] Click outside chart area');
         return;
       }
 
@@ -2783,13 +2745,19 @@ async function showAnalyticsModal() {
       const chartX = clickX - padding.left;
       const barIndex = Math.floor(chartX / (barWidth + spacing));
 
+      console.log('[DEBUG click] barIndex:', barIndex, 'total bars:', data.length);
+
       // Verify the click is actually on a bar (not in the spacing)
       const barStart = barIndex * (barWidth + spacing) + spacing / 2;
       const barEnd = barStart + barWidth;
 
+      console.log('[DEBUG click] barIndex calculated:', barIndex, 'barStart:', barStart, 'barEnd:', barEnd, 'chartX:', chartX);
+
       if (chartX >= barStart && chartX <= barEnd && barIndex >= 0 && barIndex < data.length) {
         const dayData = data[barIndex];
-        console.log('[Violations Click] dayData:', dayData);
+        console.log('[DEBUG Chart Click] CLICKED barIndex:', barIndex);
+        console.log('[DEBUG Chart Click] dayData.date:', dayData.date, 'dayData.label:', dayData.label);
+        console.log('[DEBUG Chart Click] full dayData:', dayData);
         if (dayData.count > 0) {
           // API returns violators, not trailers
           const violators = dayData.violators || dayData.trailers || [];
@@ -2814,21 +2782,26 @@ async function showAnalyticsModal() {
     modal.className = 'modal active';
     modal.id = 'modal-day-violations';
 
-    const formattedDate = new Date(date).toLocaleDateString('en-US', {
+    // Parse date as local time (not UTC) to avoid timezone offset issues
+    const [year, month, day] = date.split('-').map(Number);
+    const dateObj = new Date(year, month - 1, day);
+
+    const formattedDate = dateObj.toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
+    console.log('[DEBUG showDayViolationsModal] formattedDate:', formattedDate);
 
     modal.innerHTML = `
-      <div class="modal-content modal-medium" style="max-width: 600px;">
+      <div class="modal-content modal-large" style="max-width: 900px;">
         <div class="modal-header">
           <h3>🚨 Violations - ${formattedDate}</h3>
           <button class="close-modal">&times;</button>
         </div>
         <div class="modal-body">
-          <div class="violations-list" id="day-violations-list" style="max-height: 400px; overflow-y: auto;">
+          <div id="day-violations-list" style="max-height: 450px; overflow-y: auto;">
             ${trailerList.length === 0
               ? isHistoricalData
                 ? `<div class="violations-empty" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
@@ -2837,21 +2810,40 @@ async function showAnalyticsModal() {
                     <div style="font-size: 0.875rem; margin-top: 0.5rem; opacity: 0.7;">Detailed trailer data not available for historical dates</div>
                   </div>`
                 : '<div class="violations-empty">No violations recorded for this day.</div>'
-              : trailerList.map(t => `
-                <div class="violation-item" data-trailer-id="${t.trailerId || ''}">
-                  <div class="violation-main">
-                    <span class="violation-carrier">${escapeHtml(t.carrier || 'Unknown')}</span>
-                    <span class="violation-location">Door ${t.doorNumber || '?'}</span>
-                  </div>
-                  <div class="violation-meta">
-                    <span class="violation-dwell ${(t.dwellHours || 0) >= 3 ? 'critical' : 'warning'}">${(t.dwellHours || 0).toFixed(1)}h</span>
-                  </div>
-                </div>
-              `).join('')}
+              : `
+                <table class="violations-table" style="width: 100%; border-collapse: collapse;">
+                  <thead>
+                    <tr style="background: var(--bg-secondary); border-bottom: 2px solid var(--border-color);">
+                      <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Trailer #</th>
+                      <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Carrier</th>
+                      <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Customer</th>
+                      <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Driver</th>
+                      <th style="padding: 0.75rem; text-align: left; font-weight: 600;">Load #</th>
+                      <th style="padding: 0.75rem; text-align: center; font-weight: 600;">Door</th>
+                      <th style="padding: 0.75rem; text-align: right; font-weight: 600;">Dwell</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${trailerList.map(t => `
+                      <tr class="violation-row" data-trailer-id="${t.trailerId || ''}" style="border-bottom: 1px solid var(--border-color); cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'">
+                        <td style="padding: 0.75rem;">${escapeHtml(t.number || '-')}</td>
+                        <td style="padding: 0.75rem;">${escapeHtml(t.carrier || 'Unknown')}</td>
+                        <td style="padding: 0.75rem;">${escapeHtml(t.customer || '-')}</td>
+                        <td style="padding: 0.75rem;">${escapeHtml(t.driverName || '-')}</td>
+                        <td style="padding: 0.75rem;">${escapeHtml(t.loadNumber || '-')}</td>
+                        <td style="padding: 0.75rem; text-align: center;">${t.doorNumber || '?'}</td>
+                        <td style="padding: 0.75rem; text-align: right;">
+                          <span class="${(t.dwellHours || 0) >= 3 ? 'text-danger' : 'text-warning'}" style="font-weight: 600;">${(t.dwellHours || 0).toFixed(1)}h</span>
+                        </td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              `}
           </div>
           ${trailerList.length > 0 ? `
           <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.875rem;">
-            ${trailerList.length} violation${trailerList.length !== 1 ? 's' : ''} on ${label || date}
+            ${trailerList.length} violation${trailerList.length !== 1 ? 's' : ''} on ${label || date} — Double-click a row to view trailer details
           </div>` : ''}
         </div>
         <div class="modal-actions">
@@ -2884,11 +2876,10 @@ async function showAnalyticsModal() {
     };
     document.addEventListener('keydown', escapeHandler);
 
-    // Click on trailer to open edit modal
-    modal.querySelectorAll('.violation-item').forEach(item => {
-      item.style.cursor = 'pointer';
-      item.addEventListener('dblclick', () => {
-        const trailerId = item.dataset.trailerId;
+    // Click on trailer row to open edit modal
+    modal.querySelectorAll('.violation-row').forEach(row => {
+      row.addEventListener('dblclick', () => {
+        const trailerId = row.dataset.trailerId;
         if (trailerId) {
           closeModal();
           // Find trailer in current state
@@ -2901,13 +2892,17 @@ async function showAnalyticsModal() {
         }
       });
     });
+
+    // Initial load for violations view (since it's the default)
+    if (currentView === 'violations') {
+      console.log('[DEBUG] Initial loadViolations call on modal open');
+      loadViolations();
+    }
   }
-  
+
   // Refresh handler
   document.getElementById('btn-refresh-analytics')?.addEventListener('click', () => {
-    if (currentView === 'dwell') {
-      loadAnalytics(currentPeriod);
-    } else if (currentView === 'violations') {
+    if (currentView === 'violations') {
       loadViolations();
     } else if (currentView === 'patterns') {
       loadPatterns();

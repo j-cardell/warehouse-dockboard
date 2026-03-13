@@ -84,7 +84,11 @@ function calculateDailyDwell(date, facilityId = null) {
           doorId: entry.doorId || entry.doorNumber,
           doorNumber: entry.doorNumber,
           carrier: entry.carrier,
-          arrivedAt: entryTime < dayStart ? dayStart : entryTime, // Cap at day start
+          trailerNumber: entry.number || entry.trailerNumber,
+          customer: entry.customer,
+          driverName: entry.driverName,
+          loadNumber: entry.loadNumber,
+          arrivedAt: entryTime,
           departedAt: null,
         });
       }
@@ -125,7 +129,11 @@ function calculateDailyDwell(date, facilityId = null) {
           doorId: t.doorId,
           doorNumber: t.doorNumber,
           carrier: t.carrier,
-          arrivedAt: startTime < dayStart ? dayStart : startTime,
+          trailerNumber: t.number,
+          customer: t.customer,
+          driverName: t.driverName,
+          loadNumber: t.loadNumber,
+          arrivedAt: startTime, // Store actual arrival time, not capped
           departedAt: null,
         });
       }
@@ -147,12 +155,15 @@ function calculateDailyDwell(date, facilityId = null) {
       endTime = dayEnd;
     }
 
-    // Cap times to the day boundaries
-    const startTime = Math.max(info.arrivedAt, dayStart);
+    // Calculate the ACTUAL arrival time for this day's calculation
+    // If trailer arrived before dayStart, we cap at dayStart for dwell calculation
+    // BUT we track the original arrival for violation logic
+    const originalArrival = info.arrivedAt;
+    const cappedStartTime = Math.max(originalArrival, dayStart);
     const actualEndTime = Math.min(endTime, dayEnd + 1); // +1ms to include full day
 
-    if (actualEndTime > startTime) {
-      const dwellMs = actualEndTime - startTime;
+    if (actualEndTime > cappedStartTime) {
+      const dwellMs = actualEndTime - cappedStartTime;
       const dwellHours = dwellMs / (1000 * 60 * 60);
 
       // Cap at 6 hours for display
@@ -166,20 +177,61 @@ function calculateDailyDwell(date, facilityId = null) {
           maxDwell = cappedDwell;
         }
 
-        if (cappedDwell >= 2) {
+        // VIOLATION LOGIC CHANGE:
+        // Only count as violation if trailer accumulated >= 2 hours SPECIFICALLY ON THIS DAY
+        // This means:
+        // - If trailer arrived this day and stayed >= 2 hours → violation
+        // - If trailer arrived previous day but accumulated < 2 hours before midnight
+        //   AND more time today to reach >= 2 hours total → violation on TODAY
+        // - If trailer already had >= 2 hours before this day started → don't count again
+
+        let isViolation = false;
+
+        if (originalArrival >= dayStart) {
+          // Trailer arrived this day - check if it reached 2+ hours this day
+          if (dwellHours >= 2) {
+            isViolation = true;
+          }
+        } else {
+          // Trailer arrived before this day - check if it was at the door
+          // at day start AND the accumulated time from previous days was < 2 hours
+          // (meaning it crosses the threshold during this day)
+
+          // Calculate how much dwell time accumulated BEFORE this day
+          const previousDwellMs = dayStart - originalArrival;
+          const previousDwellHours = previousDwellMs / (1000 * 60 * 60);
+
+          // Only count as violation if previous days had < 2 hours
+          // AND this day pushed it over
+          if (previousDwellHours < 2 && dwellHours >= 2) {
+            isViolation = true;
+          }
+        }
+
+        if (isViolation) {
           violations++;
-          violatorList.push({
+          // Calculate total dwell time (not just today's capped dwell)
+          const totalDwellMs = actualEndTime - originalArrival;
+          const totalDwellHours = totalDwellMs / (1000 * 60 * 60);
+
+          const violator = {
             trailerId,
             carrier: info.carrier,
-            dwellHours: Math.round(cappedDwell * 100) / 100,
+            number: info.trailerNumber,
+            customer: info.customer,
+            driverName: info.driverName,
+            loadNumber: info.loadNumber,
+            dwellHours: Math.round(totalDwellHours * 100) / 100,
             doorNumber: info.doorNumber,
-          });
+          };
+          violatorList.push(violator);
         }
       }
     }
   }
 
   const avgDwell = count > 0 ? Math.round((totalDwell / count) * 100) / 100 : 0;
+
 
   // Store in analytics
   if (!analytics.dailyStats) analytics.dailyStats = {};
@@ -190,7 +242,7 @@ function calculateDailyDwell(date, facilityId = null) {
     maxDwell: Math.round(maxDwell * 100) / 100,
     count,
     violations,
-    violators: violatorList.slice(0, 10),
+    violators: violatorList,
     calculatedAt: new Date().toISOString(),
   };
 
@@ -226,9 +278,15 @@ function getDwellViolations(period = "day", facilityId = null) {
       d.setDate(d.getDate() - i);
       const dateKey = d.toISOString().split("T")[0];
 
-      // Calculate if not exists or recalculate if stale
+      // Calculate if not exists or recalculate if data looks wrong
+      // (detect old buggy data where violations equaled total count,
+      // or violators array is truncated, or violators are missing number field)
       let dayStats = analytics.dailyStats?.[dateKey];
-      if (!dayStats) {
+      const hasMissingFields = dayStats?.violators?.some(v => !v.number);
+      if (!dayStats ||
+          (dayStats.violations > 0 && dayStats.violations === dayStats.count) ||
+          (dayStats.violators && dayStats.violators.length < dayStats.violations) ||
+          hasMissingFields) {
         dayStats = calculateDailyDwell(dateKey, facilityId);
       }
 

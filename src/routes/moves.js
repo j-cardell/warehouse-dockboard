@@ -231,6 +231,8 @@ router.post("/move-to-door", requireAuth, requireRole("user"), (req, res) => {
     trailerNumber: trailer.number,
     carrier: trailer.carrier,
     customer: trailer.customer,
+    driverName: trailer.driverName,
+    loadNumber: trailer.loadNumber,
     doorNumber: door.number,
     status: trailer.status,
     isLive: trailer.isLive,
