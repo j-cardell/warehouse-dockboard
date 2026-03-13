@@ -225,7 +225,12 @@ function getDwellViolations(period = "day", facilityId = null) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const dateKey = d.toISOString().split("T")[0];
-      const dayStats = analytics.dailyStats?.[dateKey];
+
+      // Calculate if not exists or recalculate if stale
+      let dayStats = analytics.dailyStats?.[dateKey];
+      if (!dayStats) {
+        dayStats = calculateDailyDwell(dateKey, facilityId);
+      }
 
       result.push({
         date: dateKey,

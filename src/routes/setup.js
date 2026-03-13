@@ -103,7 +103,7 @@ router.post("/", requireAuth, async (req, res) => {
     numRamps = 0,
     doorStart = 1,
     yardStart = 1,
-    facilityName = "Default Facility",
+    facilityName,
     facilityId: customFacilityId,
   } = req.body;
 

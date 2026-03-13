@@ -344,6 +344,147 @@ async function updateUser(userId, updates, facilityId = DEFAULT_FACILITY_ID) {
 }
 
 /**
+ * Update a global user (bootstrap admin)
+ * Returns { success: boolean, user?: object, error?: string }
+ */
+async function updateGlobalUser(userId, updates) {
+  const usersData = loadGlobalUsers();
+  const userIndex = usersData.users.findIndex((u) => u.id === userId);
+
+  if (userIndex === -1) {
+    return { success: false, error: "User not found" };
+  }
+
+  const user = usersData.users[userIndex];
+
+  // Update allowed fields
+  if (updates.role !== undefined) {
+    const validRoles = ["admin", "user", "viewer"];
+    if (!validRoles.includes(updates.role)) {
+      return { success: false, error: "Invalid role" };
+    }
+    user.role = updates.role;
+  }
+
+  if (updates.active !== undefined) {
+    user.active = updates.active;
+  }
+
+  if (updates.password) {
+    if (updates.password.length < 8) {
+      return { success: false, error: "Password must be at least 8 characters" };
+    }
+    user.passwordHash = await hashPassword(updates.password);
+  }
+
+  user.updatedAt = new Date().toISOString();
+
+  if (!saveGlobalUsers(usersData)) {
+    return { success: false, error: "Failed to save user" };
+  }
+
+  // Return user without password hash
+  const { passwordHash: _, ...userWithoutPassword } = user;
+  return { success: true, user: userWithoutPassword };
+}
+
+/**
+ * Update a global bootstrap user
+ * Returns { success: boolean, user?: object, error?: string }
+ */
+async function updateGlobalUser(userId, updates) {
+  const usersData = loadGlobalUsers();
+  const userIndex = usersData.users.findIndex((u) => u.id === userId);
+
+  if (userIndex === -1) {
+    return { success: false, error: "User not found" };
+  }
+
+  const user = usersData.users[userIndex];
+
+  // Update allowed fields
+  if (updates.role !== undefined) {
+    const validRoles = ["admin", "user", "viewer"];
+    if (!validRoles.includes(updates.role)) {
+      return { success: false, error: "Invalid role" };
+    }
+    user.role = updates.role;
+  }
+
+  if (updates.active !== undefined) {
+    user.active = updates.active;
+  }
+
+  if (updates.password) {
+    if (updates.password.length < 8) {
+      return { success: false, error: "Password must be at least 8 characters" };
+    }
+    user.passwordHash = await hashPassword(updates.password);
+  }
+
+  if (updates.email !== undefined) {
+    user.email = updates.email;
+  }
+
+  user.updatedAt = new Date().toISOString();
+
+  if (!saveGlobalUsers(usersData)) {
+    return { success: false, error: "Failed to save user" };
+  }
+
+  const { passwordHash: _, ...userWithoutPassword } = user;
+  return { success: true, user: userWithoutPassword };
+}
+
+/**
+ * Update a global bootstrap user (in data/users.json, not facility-specific)
+ * Returns { success: boolean, user?: object, error?: string }
+ */
+async function updateGlobalUser(userId, updates) {
+  const usersData = loadGlobalUsers();
+  const userIndex = usersData.users.findIndex((u) => u.id === userId);
+
+  if (userIndex === -1) {
+    return { success: false, error: "User not found" };
+  }
+
+  const user = usersData.users[userIndex];
+
+  // Update allowed fields
+  if (updates.role !== undefined) {
+    const validRoles = ["admin", "user", "viewer"];
+    if (!validRoles.includes(updates.role)) {
+      return { success: false, error: "Invalid role" };
+    }
+    user.role = updates.role;
+  }
+
+  if (updates.active !== undefined) {
+    user.active = updates.active;
+  }
+
+  if (updates.password) {
+    if (updates.password.length < 8) {
+      return { success: false, error: "Password must be at least 8 characters" };
+    }
+    user.passwordHash = await hashPassword(updates.password);
+  }
+
+  if (updates.email !== undefined) {
+    user.email = updates.email;
+  }
+
+  user.updatedAt = new Date().toISOString();
+
+  if (!saveGlobalUsers(usersData)) {
+    return { success: false, error: "Failed to save user" };
+  }
+
+  const { passwordHash: _, ...userWithoutPassword } = user;
+  return { success: true, user: userWithoutPassword };
+}
+
+/**
  * Delete (deactivate) a user
  */
 function deleteUser(userId, facilityId = DEFAULT_FACILITY_ID) {
@@ -634,6 +775,7 @@ module.exports = {
   saveGlobalUsers,
   findGlobalUserByUsername,
   findGlobalUserById,
+  updateGlobalUser,
   findUserByUsername,
   findUserByUsernameGlobal,
   findUserById,

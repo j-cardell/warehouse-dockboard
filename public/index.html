@@ -56,17 +56,18 @@
                 <p class="modal-subtitle">Configure your facility to get started</p>
             </div>
             <div class="modal-body">
-                <!-- Facility Name and ID -->
+                <!-- Facility ID and Name -->
                 <div id="setup-facility-name-section" class="form-group hidden" style="margin-bottom: 1.5rem;">
-                    <label for="setup-facility-name">🏭 Facility Name *</label>
-                    <input type="text" id="setup-facility-name" placeholder="Enter facility name (e.g., Main Warehouse)" required
-                           style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; margin-bottom: 1rem;">
-                    <span class="setup-hint">Name for this facility (required)</span>
+                    <label for="setup-facility-id">🆔 Facility ID *</label>
+                    <input type="text" id="setup-facility-id"
+                           style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; text-transform: uppercase; margin-bottom: 1rem;"
+                           required pattern="[A-Z0-9\-]+" title="Uppercase letters, numbers, and hyphens only">
+                    <span class="setup-hint">Required: Uppercase letters, numbers, and hyphens only</span>
 
-                    <label for="setup-facility-id" style="margin-top: 1rem;">🆔 Facility ID (optional)</label>
-                    <input type="text" id="setup-facility-id" placeholder="auto-generated"
+                    <label for="setup-facility-name" style="margin-top: 1rem;">🏭 Facility Name (optional)</label>
+                    <input type="text" id="setup-facility-name"
                            style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem;">
-                    <span class="setup-hint">Custom ID (letters, numbers, hyphens only). Leave blank for auto-generated.</span>
+                    <span class="setup-hint">Defaults to Facility ID if left blank</span>
                 </div>
 
                 <form id="setup-form">
@@ -97,7 +98,7 @@
                             <span class="setup-hint">Waste container locations</span>
                         </div>
                         <div class="setup-item">
-                            <label for="setup-ramps">🛤️ Ramps</label>
+                            <label for="setup-ramps"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:middle; margin-right:4px;"><polygon points="2,20 22,20 22,6"/></svg> Ramps</label>
                             <input type="number" id="setup-ramps" min="0" max="50" value="0" required>
                             <span class="setup-hint">Ground-level ramp locations</span>
                         </div>

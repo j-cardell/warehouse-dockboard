@@ -21,6 +21,7 @@ const path = require("path");
 const { requireAuth, requireRole } = require("../middleware");
 const { DATA_DIR, STATE_FILE } = require("../config");
 const { loadState, saveState, addHistoryEntry } = require("../state");
+const { getFacility } = require("../facilities");
 
 // Get list of archive files (protected)
 router.get("/", requireAuth, (req, res) => {
@@ -35,43 +36,58 @@ router.get("/", requireAuth, (req, res) => {
     const { getFacility } = require("../facilities");
     const currentFacility = getFacility(facilityId);
 
-    const files = fs
-      .readdirSync(archivesDir)
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => {
-        const filePath = path.join(archivesDir, f);
-        const stats = fs.statSync(filePath);
+    // Recursively find all archive files
+    const files = [];
+    function findArchives(dir, basePath = "") {
+      if (!fs.existsSync(dir)) return;
 
-        // Try to read metadata from archive
-        let archiveFacilityId = null;
-        let archiveFacilityName = null;
-        try {
-          const content = fs.readFileSync(filePath, "utf8");
-          const data = JSON.parse(content);
-          if (data._archiveMetadata) {
-            archiveFacilityId = data._archiveMetadata.facilityId;
-            archiveFacilityName = data._archiveMetadata.facilityName;
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        const relativePath = path.join(basePath, entry.name);
+
+        if (entry.isDirectory()) {
+          findArchives(fullPath, relativePath);
+        } else if (entry.name.endsWith(".json")) {
+          const stats = fs.statSync(fullPath);
+
+          // Try to read metadata from archive
+          let archiveFacilityId = null;
+          let archiveFacilityName = null;
+          try {
+            const content = fs.readFileSync(fullPath, "utf8");
+            const data = JSON.parse(content);
+            if (data._archiveMetadata) {
+              archiveFacilityId = data._archiveMetadata.facilityId;
+              archiveFacilityName = data._archiveMetadata.facilityName;
+            }
+          } catch (e) {
+            // Legacy archive without metadata
           }
-        } catch (e) {
-          // Legacy archive without metadata
-        }
 
-        return {
-          name: f,
-          size: stats.size,
-          created: stats.birthtime,
-          facilityId: archiveFacilityId,
-          facilityName: archiveFacilityName,
-          // Include archives that match current facility or have no metadata (legacy)
-          isForCurrentFacility: !archiveFacilityId || archiveFacilityId === facilityId,
-        };
-      })
+          files.push({
+            name: entry.name,
+            path: relativePath,
+            size: stats.size,
+            created: stats.birthtime,
+            facilityId: archiveFacilityId,
+            facilityName: archiveFacilityName,
+            // Include archives that match current facility or have no metadata (legacy)
+            isForCurrentFacility: !archiveFacilityId || archiveFacilityId === facilityId,
+          });
+        }
+      }
+    }
+
+    findArchives(archivesDir);
+
+    const sortedFiles = files
       // Filter to only show archives for current facility (or legacy archives)
       .filter((f) => f.isForCurrentFacility)
       .sort((a, b) => new Date(b.created) - new Date(a.created));
 
     res.json({
-      archives: files,
+      archives: sortedFiles,
       facilityId,
       facilityName: currentFacility?.name || "Unknown Facility",
     });
@@ -79,6 +95,16 @@ router.get("/", requireAuth, (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Helper to get archive directory path organized by facility/year/month
+function getArchiveDir(facilityId) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const archivePath = path.join(DATA_DIR, "archives", facilityId, String(year), month);
+  console.log(`[Archives] Archive directory path: ${archivePath} for facility: ${facilityId}`);
+  return archivePath;
+}
 
 // Create archive snapshot (protected)
 router.post("/", requireAuth, requireRole("user"), (req, res) => {
@@ -92,7 +118,7 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `archive-${facilityId}-${timestamp}.json`;
-    const archivesDir = path.join(DATA_DIR, "archives");
+    const archivesDir = getArchiveDir(facilityId);
 
     if (!fs.existsSync(archivesDir)) {
       fs.mkdirSync(archivesDir, { recursive: true });
@@ -122,15 +148,39 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
 // Download archive file (protected)
 router.get("/:filename", requireAuth, (req, res) => {
   try {
-    const filename = req.params.filename;
+    // Decode URL-encoded filename (Express doesn't auto-decode path params with special chars)
+    const filename = decodeURIComponent(req.params.filename);
     // Sanitize filename to prevent directory traversal
     if (!filename.match(/^([\w\-])+\.json$/)) {
       return res.status(400).json({ error: "Invalid filename" });
     }
-    const filePath = path.join(DATA_DIR, "archives", filename);
-    if (!fs.existsSync(filePath)) {
+
+    // Search recursively in archives directory
+    const archivesDir = path.join(DATA_DIR, "archives");
+    let filePath = null;
+
+    function findFile(dir) {
+      if (!fs.existsSync(dir)) return;
+
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          const result = findFile(fullPath);
+          if (result) return result;
+        } else if (entry.name === filename) {
+          return fullPath;
+        }
+      }
+      return null;
+    }
+
+    filePath = findFile(archivesDir);
+
+    if (!filePath) {
       return res.status(404).json({ error: "File not found" });
     }
+
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Type", "application/json");
     fs.createReadStream(filePath).pipe(res);
@@ -392,6 +442,10 @@ router.post("/restore", requireAuth, requireRole("admin"), async (req, res) => {
     // Check if this is a cross-facility restore
     const isCrossFacility = sourceFacilityId && sourceFacilityId !== targetFacilityId;
 
+    // Get target facility info for the warning message
+    const currentFacility = getFacility(targetFacilityId);
+    const targetFacilityName = currentFacility?.name || "Current Facility";
+
     // If cross-facility and not confirmed, return warning
     if (isCrossFacility && !confirmed) {
       return res.status(409).json({
@@ -401,7 +455,7 @@ router.post("/restore", requireAuth, requireRole("admin"), async (req, res) => {
           sourceFacilityId,
           sourceFacilityName,
           targetFacilityId,
-          targetFacilityName: req.user.facilityName || "Current Facility",
+          targetFacilityName,
           message: `This archive is from "${sourceFacilityName}" (${sourceFacilityId}). Are you sure you want to restore it to your current facility?`,
         },
         requiresConfirmation: true,
@@ -423,14 +477,15 @@ router.post("/restore", requireAuth, requireRole("admin"), async (req, res) => {
     // Sanitize the data
     const sanitizedData = sanitizeArchiveData(stateData);
 
-    // Create backup of current state before restore
-    const { getFacility } = require("../facilities");
-    const currentFacility = getFacility(targetFacilityId);
+    // Create backup of current state before restore (organized by facility/year/month)
     const currentState = loadState(targetFacilityId);
     const backupTimestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupDir = getArchiveDir(targetFacilityId);
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
     const backupPath = path.join(
-      DATA_DIR,
-      "archives",
+      backupDir,
       `auto-backup-before-restore-${targetFacilityId}-${backupTimestamp}.json`,
     );
 
@@ -477,6 +532,70 @@ router.post("/restore", requireAuth, requireRole("admin"), async (req, res) => {
   } catch (error) {
     console.error("[Restore] Error:", error);
     res.status(500).json({ error: "Failed to restore archive" });
+  }
+});
+
+// Delete archive file (protected, admin only)
+router.delete("/:filename", requireAuth, requireRole("admin"), (req, res) => {
+  try {
+    // Decode URL-encoded filename (Express doesn't auto-decode path params with special chars)
+    const filename = decodeURIComponent(req.params.filename);
+    // Sanitize filename to prevent directory traversal
+    if (!filename.match(/^([\w\-])+\.json$/)) {
+      return res.status(400).json({ error: "Invalid filename" });
+    }
+
+    // Search recursively in archives directory
+    const archivesDir = path.join(DATA_DIR, "archives");
+    let filePath = null;
+
+    function findFile(dir) {
+      if (!fs.existsSync(dir)) return;
+
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          const result = findFile(fullPath);
+          if (result) return result;
+        } else if (entry.name === filename) {
+          return fullPath;
+        }
+      }
+      return null;
+    }
+
+    filePath = findFile(archivesDir);
+
+    if (!filePath) {
+      return res.status(404).json({ error: "File not found" });
+    }
+
+    fs.unlinkSync(filePath);
+
+    // Clean up empty parent directories (month -> year -> facility)
+    // Stop at the archives directory level
+    let currentDir = path.dirname(filePath);
+    let archivesBaseDir = path.join(DATA_DIR, "archives");
+
+    while (currentDir !== archivesBaseDir && currentDir.startsWith(archivesBaseDir)) {
+      try {
+        const contents = fs.readdirSync(currentDir);
+        if (contents.length === 0) {
+          fs.rmdirSync(currentDir);
+          currentDir = path.dirname(currentDir);
+        } else {
+          break; // Directory not empty, stop cleanup
+        }
+      } catch (e) {
+        break; // Error reading directory, stop cleanup
+      }
+    }
+
+    res.json({ success: true, message: "Archive deleted successfully" });
+  } catch (error) {
+    console.error("[Delete Archive] Error:", error);
+    res.status(500).json({ error: "Failed to delete archive" });
   }
 });
 

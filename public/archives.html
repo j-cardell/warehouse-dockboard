@@ -86,6 +86,19 @@
         function switchTab(tab) {
             document.getElementById('tab-create').style.display = tab === 'create' ? 'block' : 'none';
             document.getElementById('tab-browse').style.display = tab === 'browse' ? 'block' : 'none';
+
+            // Update active state on tab buttons
+            const buttons = document.querySelectorAll('.search-tab');
+            buttons.forEach((btn, index) => {
+                if (index === 0) {
+                    // Create tab
+                    btn.classList.toggle('active', tab === 'create');
+                } else {
+                    // Browse tab
+                    btn.classList.toggle('active', tab === 'browse');
+                }
+            });
+
             if (tab === 'browse') loadFiles();
         }
         
@@ -102,25 +115,103 @@
                     return;
                 }
 
-                document.getElementById('file-list').innerHTML = data.archives.map(f => {
-                    const date = new Date(f.created).toLocaleString();
-                    const facilityBadge = f.facilityName
-                        ? `<span style="background:var(--info); color:white; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:0.5rem;">${f.facilityName}</span>`
-                        : '<span style="background:var(--text-muted); color:white; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:0.5rem;">Legacy</span>';
+                // Group archives by year/month
+                const grouped = {};
+                data.archives.forEach(f => {
+                    const date = new Date(f.created);
+                    const yearMonth = `${date.getFullYear()} / ${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    if (!grouped[yearMonth]) grouped[yearMonth] = [];
+                    grouped[yearMonth].push(f);
+                });
 
-                    return `<div style="padding:12px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
-                        <div style="display:flex; flex-direction:column; gap:0.25rem;">
-                            <div style="display:flex; align-items:center; gap:0.5rem;">
-                                ${facilityBadge}
-                                <span style="font-weight:500;">${f.name}</span>
-                            </div>
-                            <span style="color:var(--text-muted); font-size:0.8rem;">${date} • ${(f.size/1024).toFixed(1)} KB</span>
-                        </div>
-                        <button class="btn btn-small btn-secondary" onclick="downloadArchive('${f.name}')">Download</button>
-                     </div>`;
-                }).join('');
+                // Sort year/month groups descending
+                const sortedGroups = Object.keys(grouped).sort().reverse();
+
+                let html = '';
+                sortedGroups.forEach(yearMonth => {
+                    const [year, month] = yearMonth.split(' / ');
+                    html += `<div class="archive-month-group" style="margin-bottom:1.5rem;">`;
+                    html += `<h3 style="padding:0.5rem 1rem; background:var(--bg-primary); border-radius:var(--radius-md); margin-bottom:0.5rem; color:var(--text-secondary); font-size:1rem;">`;
+                    html += `📁 ${year} / ${month} <span style="color:var(--text-muted); font-size:0.85rem;">(${grouped[yearMonth].length} archive${grouped[yearMonth].length > 1 ? 's' : ''})</span>`;
+                    html += `</h3>`;
+                    html += `<div style="padding-left:1rem;">`;
+
+                    grouped[yearMonth].forEach(f => {
+                        const date = new Date(f.created).toLocaleString();
+                        const facilityBadge = f.facilityName
+                            ? `<span style="background:var(--info); color:white; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:0.5rem;">${f.facilityName}</span>`
+                            : '<span style="background:var(--text-muted); color:white; padding:2px 8px; border-radius:4px; font-size:0.75rem; margin-right:0.5rem;">Legacy</span>';
+
+                        html += `<div style="padding:12px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">`;
+                        html += `<div style="display:flex; flex-direction:column; gap:0.25rem; flex:1;">`;
+                        html += `<div style="display:flex; align-items:center; gap:0.5rem;">`;
+                        html += `${facilityBadge}`;
+                        html += `<span style="font-weight:500;">${f.name}</span>`;
+                        html += `</div>`;
+                        html += `<span style="color:var(--text-muted); font-size:0.8rem;">${date} • ${(f.size/1024).toFixed(1)} KB</span>`;
+                        html += `</div>`;
+                        html += `<div style="display:flex; gap:0.5rem;">`;
+                        html += `<button class="btn btn-small btn-primary" onclick="restoreArchive('${encodeURIComponent(f.name)}')">🔄 Restore</button>`;
+                        html += `<button class="btn btn-small btn-secondary" onclick="downloadArchive('${encodeURIComponent(f.name)}')">⬇️ Download</button>`;
+                        html += `<button class="btn btn-small btn-danger" onclick="deleteArchive('${encodeURIComponent(f.name)}')">🗑️ Delete</button>`;
+                        html += `</div>`;
+                        html += `</div>`;
+                    });
+
+                    html += `</div></div>`;
+                });
+
+                document.getElementById('file-list').innerHTML = html;
             } catch (e) {
                 document.getElementById('file-list').innerHTML = '<p style="color:var(--danger); padding:2rem;">Error: ' + e.message + '</p>';
+            }
+        }
+
+        // Restore archive directly
+        async function restoreArchive(encodedFilename) {
+            if (!confirm('⚠️ WARNING: This will overwrite ALL current data!\n\nAre you sure you want to restore from this archive?')) {
+                return;
+            }
+
+            const resultDiv = document.getElementById('upload-result');
+            resultDiv.innerHTML = '<p style="color:var(--text-secondary)">Downloading and restoring...</p>';
+
+            try {
+                // First download the archive (filename is already encoded from onclick)
+                const res = await fetch(`/api/archives/${encodedFilename}`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token') }
+                });
+                if (!res.ok) throw new Error('Failed to download archive');
+                const data = await res.json();
+
+                // Then perform restore
+                await performRestore(data, false);
+            } catch (e) {
+                resultDiv.innerHTML = `<p style="color:#ef4444;">❌ Error: ${e.message}</p>`;
+            }
+        }
+
+        // Delete archive
+        async function deleteArchive(encodedFilename) {
+            if (!confirm(`Are you sure you want to delete "${decodeURIComponent(encodedFilename)}"?\n\nThis action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/archives/${encodedFilename}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token') }
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    alert('Archive deleted successfully');
+                    loadFiles(); // Refresh the list
+                } else {
+                    throw new Error(data.error || 'Failed to delete');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
             }
         }
 
@@ -153,9 +244,10 @@
             }
         }
 
-        async function downloadArchive(filename) {
+        async function downloadArchive(encodedFilename) {
+            const filename = decodeURIComponent(encodedFilename);
             try {
-                const res = await fetch(`/api/archives/${filename}`, {
+                const res = await fetch(`/api/archives/${encodedFilename}`, {
                     headers: { 'Authorization': 'Bearer ' + localStorage.getItem('dockboard_token') }
                 });
                 if (!res.ok) throw new Error('Download failed');
@@ -238,6 +330,9 @@
             }
         });
 
+        // Global variable to store current facility name
+        let currentFacilityName = 'Current Facility';
+
         // Check auth on page load
         checkAuth().then(() => {
             // Load current facility info for display
@@ -255,6 +350,7 @@
 
                 if (data.authenticated && data.user) {
                     const facilityName = data.user.currentFacilityName || data.user.homeFacilityName || 'Unknown Facility';
+                    currentFacilityName = facilityName;
                     document.getElementById('create-facility-name').textContent = facilityName;
                 }
             } catch (e) {
@@ -288,20 +384,19 @@
 
                 // Show initial confirmation with facility info
                 let confirmMessage = `⚠️ WARNING: This will overwrite ALL current data!\n\n`;
-                confirmMessage += `File: ${file.name}\n`;
-                confirmMessage += `Size: ${(file.size/1024).toFixed(1)} KB\n\n`;
 
                 if (hasMetadata) {
                     confirmMessage += `📍 Source Facility: ${sourceFacilityName}\n`;
-                    if (archiveCreatedAt) {
-                        confirmMessage += `📅 Created: ${new Date(archiveCreatedAt).toLocaleString()}\n`;
-                    }
-                    confirmMessage += `\n`;
                 } else {
-                    confirmMessage += `⚠️ Legacy archive (no facility info)\n\n`;
+                    confirmMessage += `📍 Source Facility: Unknown (legacy archive)\n`;
                 }
-
-                confirmMessage += `Continue with restore?`;
+                confirmMessage += `📍 Target Facility: ${currentFacilityName}\n\n`;
+                confirmMessage += `File: ${file.name}\n`;
+                confirmMessage += `Size: ${(file.size/1024).toFixed(1)} KB\n`;
+                if (hasMetadata && archiveCreatedAt) {
+                    confirmMessage += `📅 Created: ${new Date(archiveCreatedAt).toLocaleString()}\n`;
+                }
+                confirmMessage += `\nContinue with restore?`;
 
                 if (!confirm(confirmMessage)) {
                     resultDiv.innerHTML = '';

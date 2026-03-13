@@ -2345,9 +2345,9 @@ async function showAnalyticsModal() {
           </div>
         </div>
         <div class="analytics-info" id="dwell-info">
-          <p>📈 <strong>Tracking Method:</strong> Daily dwell calculated from movement history. Each trailer's actual time at dock is computed from arrival (MOVED_TO_DOOR) to departure (MOVED_TO_YARD/deleted).</p>
-          <p>📊 <strong>Data Accuracy:</strong> Precise dwell times calculated retroactively from complete history - not sampled snapshots.</p>
-          <p>🔄 <strong>Dwell Reset:</strong> When you reset a trailer's dwell time, tracking restarts from that point for future calculations.</p>
+          <p>📈 <strong>Tracking Method:</strong> Dwell time is calculated from complete movement history. Each trailer's time at dock is measured from arrival (MOVED_TO_DOOR) until departure (MOVED_TO_YARD, shipped, or deleted). Data is recalculated daily from history entries.</p>
+          <p>📊 <strong>Data Accuracy:</strong> Analytics use actual dwell times from history. Daily averages include all trailers with dwell times &gt; 6 hours capped to prevent outliers from skewing statistics. Violation reports show actual uncapped times.</p>
+          <p>🔄 <strong>Dwell Reset:</strong> When you reset a trailer's dwell time in the UI, it clears the dwellResets array and sets createdAt to now. This affects future calculations but historical analytics remain unchanged.</p>
         </div>
       </div>
       <div class="modal-actions">
@@ -2675,34 +2675,42 @@ async function showAnalyticsModal() {
     }
   }
   
+  // Store chart data for click handling
+  let violationsChartData = null;
+  let violationsChartDimensions = null;
+
   function renderViolationsChart(data) {
     const canvas = document.getElementById('violations-chart');
     if (!canvas || !data || data.length === 0) return;
-    
+
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    
+
     canvas.width = (rect.width || 800) * dpr;
     canvas.height = (rect.height || 300) * dpr;
     ctx.scale(dpr, dpr);
-    
+
     const width = rect.width || 800;
     const height = rect.height || 300;
     const padding = { top: 30, right: 20, bottom: 50, left: 50 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
-    
+
+    // Store data and dimensions for click handling
+    violationsChartData = data;
+    violationsChartDimensions = { width, height, padding, chartWidth, chartHeight };
+
     // Clear
     ctx.clearRect(0, 0, width, height);
-    
+
     // Find max
     const maxCount = Math.max(...data.map(d => d.count || 0), 5);
-    
+
     // Draw grid
     ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
     ctx.lineWidth = 1;
-    
+
     const ySteps = 5;
     for (let i = 0; i <= ySteps; i++) {
       const y = padding.top + chartHeight - (i / ySteps) * chartHeight;
@@ -2710,38 +2718,188 @@ async function showAnalyticsModal() {
       ctx.moveTo(padding.left, y);
       ctx.lineTo(width - padding.right, y);
       ctx.stroke();
-      
+
       ctx.fillStyle = '#94a3b8';
       ctx.font = '12px sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(Math.round((i / ySteps) * maxCount).toString(), padding.left - 10, y + 4);
     }
-    
+
     // Draw bars
     const barWidth = chartWidth / data.length * 0.7;
     const spacing = chartWidth / data.length * 0.3;
-    
+
     data.forEach((d, i) => {
       const x = padding.left + i * (barWidth + spacing) + spacing / 2;
       const barHeight = ((d.count || 0) / maxCount) * chartHeight;
       const y = padding.top + chartHeight - barHeight;
-      
+
       // Red bars for violations
       ctx.fillStyle = d.count > 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(148, 163, 184, 0.3)';
       ctx.fillRect(x, y, barWidth, barHeight);
-      
+
       // Label
       ctx.fillStyle = '#94a3b8';
       ctx.font = '11px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(d.label || '', x + barWidth / 2, height - 20);
-      
+
       // Count on bar
       if (d.count > 0) {
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 12px sans-serif';
         ctx.fillText(d.count.toString(), x + barWidth / 2, y - 5);
       }
+    });
+
+    // Add click hint
+    ctx.fillStyle = '#64748b';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Click a bar to view trailers', width / 2, height - 5);
+
+    // Add click handler (remove old one first)
+    canvas.onclick = (e) => {
+      if (!violationsChartData || !violationsChartDimensions) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      const { padding, chartWidth, chartHeight, width, height } = violationsChartDimensions;
+      const data = violationsChartData;
+
+      // Check if click is within chart area
+      if (clickX < padding.left || clickX > width - padding.right ||
+          clickY < padding.top || clickY > height - padding.bottom) {
+        return;
+      }
+
+      // Calculate which bar was clicked
+      const barWidth = chartWidth / data.length * 0.7;
+      const spacing = chartWidth / data.length * 0.3;
+
+      // Find the bar index
+      const chartX = clickX - padding.left;
+      const barIndex = Math.floor(chartX / (barWidth + spacing));
+
+      // Verify the click is actually on a bar (not in the spacing)
+      const barStart = barIndex * (barWidth + spacing) + spacing / 2;
+      const barEnd = barStart + barWidth;
+
+      if (chartX >= barStart && chartX <= barEnd && barIndex >= 0 && barIndex < data.length) {
+        const dayData = data[barIndex];
+        console.log('[Violations Click] dayData:', dayData);
+        if (dayData.count > 0) {
+          // API returns violators, not trailers
+          const violators = dayData.violators || dayData.trailers || [];
+          console.log('[Violations Click] violators:', violators);
+          showDayViolationsModal(dayData.date, dayData.label, violators, dayData.count);
+        }
+      }
+    };
+  }
+
+  // Show modal with trailers for a specific day's violations
+  function showDayViolationsModal(date, label, trailers, violationCount) {
+    // Ensure trailers is an array
+    const trailerList = Array.isArray(trailers) ? trailers : [];
+    // Use violationCount if provided, otherwise count the trailers
+    const count = violationCount !== undefined ? violationCount : trailerList.length;
+
+    // Check if this is historical data without violator details
+    const isHistoricalData = count > 0 && trailerList.length === 0;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.id = 'modal-day-violations';
+
+    const formattedDate = new Date(date).toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    modal.innerHTML = `
+      <div class="modal-content modal-medium" style="max-width: 600px;">
+        <div class="modal-header">
+          <h3>🚨 Violations - ${formattedDate}</h3>
+          <button class="close-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="violations-list" id="day-violations-list" style="max-height: 400px; overflow-y: auto;">
+            ${trailerList.length === 0
+              ? isHistoricalData
+                ? `<div class="violations-empty" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    <div style="font-size: 2rem; margin-bottom: 0.5rem;">📊</div>
+                    <div style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem;">${count} violation${count !== 1 ? 's' : ''} recorded</div>
+                    <div style="font-size: 0.875rem; margin-top: 0.5rem; opacity: 0.7;">Detailed trailer data not available for historical dates</div>
+                  </div>`
+                : '<div class="violations-empty">No violations recorded for this day.</div>'
+              : trailerList.map(t => `
+                <div class="violation-item" data-trailer-id="${t.trailerId || ''}">
+                  <div class="violation-main">
+                    <span class="violation-carrier">${escapeHtml(t.carrier || 'Unknown')}</span>
+                    <span class="violation-location">Door ${t.doorNumber || '?'}</span>
+                  </div>
+                  <div class="violation-meta">
+                    <span class="violation-dwell ${(t.dwellHours || 0) >= 3 ? 'critical' : 'warning'}">${(t.dwellHours || 0).toFixed(1)}h</span>
+                  </div>
+                </div>
+              `).join('')}
+          </div>
+          ${trailerList.length > 0 ? `
+          <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.875rem;">
+            ${trailerList.length} violation${trailerList.length !== 1 ? 's' : ''} on ${label || date}
+          </div>` : ''}
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary close-modal">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Close handlers
+    const closeModal = () => {
+      modal.remove();
+    };
+
+    modal.querySelectorAll('.close-modal').forEach(btn => {
+      btn.addEventListener('click', closeModal);
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    // Escape key handler
+    const escapeHandler = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', escapeHandler);
+      }
+    };
+    document.addEventListener('keydown', escapeHandler);
+
+    // Click on trailer to open edit modal
+    modal.querySelectorAll('.violation-item').forEach(item => {
+      item.style.cursor = 'pointer';
+      item.addEventListener('dblclick', () => {
+        const trailerId = item.dataset.trailerId;
+        if (trailerId) {
+          closeModal();
+          // Find trailer in current state
+          const trailer = state.trailers.find(t => t.id === trailerId);
+          if (trailer) {
+            openTrailerEditModal(trailerId);
+          } else {
+            showToast('Trailer not found in current facility', 'info');
+          }
+        }
+      });
     });
   }
   
@@ -5014,6 +5172,11 @@ function closeModal(id) {
   if (modal) {
     modal.style.display = 'none';
     modal.classList.remove('active');
+    // Remove any stored Escape key prevention handler
+    if (modal._preventEscape) {
+      document.removeEventListener('keydown', modal._preventEscape);
+      delete modal._preventEscape;
+    }
   }
 }
 
@@ -5092,8 +5255,8 @@ function showConfirmModal(options = {}) {
 
         <!-- Actions -->
         <div style="padding: 0 1.5rem 1.5rem; display: flex; gap: 0.75rem;">
-          ${cancelText !== null ? `<button id="btn-confirm-cancel" class="btn btn-secondary" style="flex: 1;">${cancelText}</button>` : ''}
-          <button id="btn-confirm-ok" class="btn ${type === 'danger' ? 'btn-danger' : 'btn-primary'}" style="flex: ${cancelText !== null ? '1' : '100%'};">${confirmText}</button>
+          ${cancelText !== null ? `<button id="btn-confirm-cancel" class="btn btn-secondary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">${cancelText} <kbd style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; font-family: monospace; color: var(--text-muted);">Esc</kbd></button>` : ''}
+          <button id="btn-confirm-ok" class="btn ${type === 'danger' ? 'btn-danger' : 'btn-primary'}" style="flex: ${cancelText !== null ? '1' : '100%'}; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">${confirmText} <kbd style="background: var(--success); border: 1px solid var(--success); border-radius: 4px; padding: 2px 6px; font-size: 0.75rem; font-family: monospace; color: white;">↵</kbd></button>
         </div>
       </div>
     `;
@@ -5124,23 +5287,31 @@ function showConfirmModal(options = {}) {
       }
     });
 
-    // Handle enter key on input
+    // Handle enter key on the modal itself (for modals without input, or when input is focused)
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        document.getElementById('btn-confirm-ok')?.click();
+      }
+    });
+
+    // Handle enter key on input field specifically
     if (requireInput) {
       document.getElementById('confirm-input')?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           document.getElementById('btn-confirm-ok')?.click();
-        } else if (e.key === 'Escape') {
-          document.getElementById('btn-confirm-cancel')?.click();
+        }
+      });
+    } else {
+      // Handle Enter key on modal when no input (focus is on modal or button)
+      modal.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          document.getElementById('btn-confirm-ok')?.click();
         }
       });
     }
-
-    // Handle escape key
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        document.getElementById('btn-confirm-cancel')?.click();
-      }
-    });
 
     // Handle backdrop click
     modal.addEventListener('click', (e) => {
@@ -6358,7 +6529,15 @@ function openDoorEditor(doorId) {
   modal.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', () => modal.remove());
   });
-  
+
+  // Enter key shortcut for save (Escape is handled by global handler)
+  modal.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('btn-save-door')?.click();
+    }
+  });
+
   document.getElementById('btn-save-door')?.addEventListener('click', async () => {
     const useTextLabel = document.querySelector('input[name="label-type"]:checked')?.value === 'text';
     const labelText = useTextLabel ? document.getElementById('door-label-text')?.value?.trim() : null;
@@ -6494,7 +6673,15 @@ function openAddDoorModal() {
   modal.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', () => modal.remove());
   });
-  
+
+  // Enter key shortcut for create (Escape is handled by global handler)
+  modal.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      document.getElementById('btn-create-door')?.click();
+    }
+  });
+
   document.getElementById('btn-create-door')?.addEventListener('click', async () => {
     const useTextLabel = document.querySelector('input[name="add-door-label-type"]:checked')?.value === 'text';
     const labelText = useTextLabel ? document.getElementById('new-door-label-text')?.value?.trim() : null;
@@ -6857,7 +7044,18 @@ function openTrailerEditModal(trailerId) {
   modal.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', () => modal.remove());
   });
-  
+
+  // Enter key shortcut for save (Escape is handled by global handler)
+  modal.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      // Only trigger if not in a textarea
+      if (e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        document.getElementById('btn-save-trailer')?.click();
+      }
+    }
+  });
+
   // Save handler - only send changed fields
   document.getElementById('btn-save-trailer')?.addEventListener('click', async () => {
     const newValues = {
@@ -7018,22 +7216,59 @@ function setupKeyboardShortcuts() {
       }
     }
     
-    // Esc to close modals
+    // Esc to close modals - works on ALL modals now
     if (e.key === 'Escape') {
       const activeModals = document.querySelectorAll('.modal.active');
       const activeModal = activeModals[activeModals.length - 1]; // Get most recent (last) modal
-      if (activeModal && activeModal.id !== 'modal-trailer-edit' && activeModal.id !== 'modal-door-edit' && activeModal.id !== 'modal-analytics' && activeModal.id !== 'modal-settings') {
-        closeModal(activeModal.id);
-      } else if (activeModal) {
-        // Remove dynamically created modals
-        if (activeModal.id === 'modal-trailer-edit' || activeModal.id === 'modal-door-edit' || activeModal.id === 'modal-add-door' || activeModal.id === 'modal-analytics' || activeModal.id === 'modal-settings') {
-          activeModal.remove();
+      if (activeModal) {
+        // Handle different modal types
+        if (activeModal.id === 'modal-trailer-edit' || activeModal.id === 'modal-door-edit' || activeModal.id === 'modal-add-door' || activeModal.id === 'modal-analytics' || activeModal.id === 'modal-settings' || activeModal.id === 'modal-custom-confirm') {
+          // For dynamically created modals, trigger the cancel/close action
+          const cancelBtn = activeModal.querySelector('#btn-cancel-trailer, #btn-cancel-door, #btn-cancel-analytics, #btn-cancel-settings, #btn-confirm-cancel, .close-modal');
+          if (cancelBtn) {
+            cancelBtn.click();
+          } else {
+            activeModal.remove();
+          }
+        } else {
+          // For standard modals, use closeModal
+          closeModal(activeModal.id);
         }
       }
-      
+
       // Also clear selection if present
       if (selectedTrailers.size > 0) {
         clearSelection();
+      }
+    }
+
+    // Enter to save/confirm in modals (skip confirm modals and edit modals - they handle their own Enter)
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      // Check if any confirm modal is open - if so, let it handle Enter
+      const confirmModal = document.getElementById('modal-custom-confirm');
+      if (confirmModal && confirmModal.classList.contains('active')) {
+        // Confirm modal is open, trigger its OK button
+        e.preventDefault();
+        document.getElementById('btn-confirm-ok')?.click();
+        return;
+      }
+
+      const activeModals = document.querySelectorAll('.modal.active');
+      const activeModal = activeModals[activeModals.length - 1];
+      // Skip edit/add modals - they have their own Enter handlers
+      if (activeModal && (activeModal.id === 'modal-trailer-edit' || activeModal.id === 'modal-door-edit' || activeModal.id === 'modal-add-door')) {
+        return;
+      }
+      if (activeModal) {
+        // Don't trigger if in a textarea (allow newlines) or on a button (let it click naturally)
+        if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'BUTTON') return;
+
+        // Find the save/confirm button in the active modal
+        const saveBtn = activeModal.querySelector('#btn-save-settings, .btn-primary:not(.btn-danger):not([disabled])');
+        if (saveBtn && !saveBtn.disabled) {
+          e.preventDefault();
+          saveBtn.click();
+        }
       }
     }
     
@@ -7192,7 +7427,8 @@ function showSetupModal(isNewFacility = false) {
   // Hide login screen completely only during initial setup
   if (loginScreen && !authState.isAuthenticated) loginScreen.classList.add('hidden');
 
-  // Show modal (needs both hidden removed AND active added)
+  // Show modal (needs display reset, hidden removed, AND active added)
+  modal.style.display = '';
   modal.classList.remove('hidden');
   modal.classList.add('active');
 
@@ -7258,16 +7494,18 @@ function showSetupModal(isNewFacility = false) {
     }
   });
 
-  // Prevent Escape key from closing modal
-  const preventEscape = (e) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      // Don't close - setup is required
-    }
-  };
-  document.addEventListener('keydown', preventEscape);
-  modal._preventEscape = preventEscape; // Store reference to remove later
+  // Prevent Escape key from closing modal during initial setup only
+  if (!allowClose) {
+    const preventEscape = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        // Don't close - setup is required
+      }
+    };
+    document.addEventListener('keydown', preventEscape);
+    modal._preventEscape = preventEscape; // Store reference to remove later
+  }
 
   // Update summary when inputs change
   const updateSummary = () => {

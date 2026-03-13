@@ -80,6 +80,61 @@ ensureDataDirs(DATA_DIR);
 // Validate auth configuration (exits if invalid)
 validateAuthConfig();
 
+// Sync bootstrap admin password if AUTH_PASS changed in environment
+// This allows updating the bootstrap admin password by changing the env var
+(async function syncBootstrapPassword() {
+  const { AUTH_PASS, MULTI_FACILITY_MODE } = require("./config");
+  const { hasUsers, findUserByUsername, findGlobalUserByUsername, verifyPassword, updateUser, updateGlobalUser } = require("./users");
+  const { DEFAULT_FACILITY_ID } = require("./config");
+
+  if (!hasUsers()) return; // No users yet - will be created on first login
+
+  const { AUTH_USER } = require("./config");
+
+  // In multi-facility mode, bootstrap admin is a global user
+  // In single facility mode, bootstrap admin is in the default facility
+  let user = null;
+  let isGlobalUser = false;
+
+  if (MULTI_FACILITY_MODE) {
+    user = findGlobalUserByUsername(AUTH_USER);
+    isGlobalUser = true;
+  }
+
+  // If not found as global user, try facility-specific
+  if (!user) {
+    user = findUserByUsername(AUTH_USER);
+    isGlobalUser = false;
+  }
+
+  if (!user) {
+    console.log("[Auth] Bootstrap user not found in database");
+    return;
+  }
+
+  try {
+    // Check if current password matches AUTH_PASS
+    const passwordMatches = await verifyPassword(AUTH_PASS, user.passwordHash);
+    if (passwordMatches) return; // Already synced
+
+    // Update bootstrap user password to match AUTH_PASS
+    let result;
+    if (isGlobalUser) {
+      result = await updateGlobalUser(user.id, { password: AUTH_PASS });
+    } else {
+      result = await updateUser(user.id, { password: AUTH_PASS }, DEFAULT_FACILITY_ID);
+    }
+
+    if (result.success) {
+      console.log("[Auth] Bootstrap admin password synced from environment");
+    } else {
+      console.error("[Auth] Failed to sync bootstrap admin password:", result.error);
+    }
+  } catch (err) {
+    console.error("[Auth] Error syncing bootstrap password:", err.message);
+  }
+})();
+
 // Prevent caching of API responses
 app.use("/api", cacheHeaders);
 
