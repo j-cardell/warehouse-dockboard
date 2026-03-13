@@ -15,6 +15,7 @@ const {
   requirePasswordReset,
   findUserByUsername,
   isBootstrapAdmin,
+  findGlobalUserByUsername,
 } = require("../users");
 
 /**
@@ -138,7 +139,7 @@ router.post("/:id/reset-password", requireAuth, requireAdmin, async (req, res) =
   // Check if target is an admin
   if (targetUser.role === "admin") {
     // Only bootstrap admin can reset other admin passwords
-    const bootstrapUser = findUserByUsername(requestingUser.username);
+    const bootstrapUser = findGlobalUserByUsername(requestingUser.username);
     if (!isBootstrapAdmin(bootstrapUser)) {
       return res.status(403).json({
         error: "Only the bootstrap admin can reset other admin passwords",
@@ -174,6 +175,25 @@ router.post("/:id/reset-password", requireAuth, requireAdmin, async (req, res) =
 
   if (!result.success) {
     return res.status(500).json({ error: result.error });
+  }
+
+  // Sync password reset requirement to all other facilities where user exists
+  const { getAllFacilities } = require("../facilities");
+  const { findUserById, saveUsers, loadUsers } = require("../users");
+  const allFacilities = getAllFacilities();
+  for (const fac of allFacilities) {
+    if (fac.id === facilityId) continue;
+    const facUser = findUserById(targetUserId, fac.id);
+    if (facUser) {
+      const usersData = loadUsers(fac.id);
+      const userIndex = usersData.users.findIndex((u) => u.id === targetUserId);
+      if (userIndex !== -1) {
+        usersData.users[userIndex].passwordResetRequired = true;
+        usersData.users[userIndex].tempPassword = result.tempPassword;
+        usersData.users[userIndex].passwordResetRequiredAt = new Date().toISOString();
+        saveUsers(usersData, fac.id);
+      }
+    }
   }
 
   res.json({

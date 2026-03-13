@@ -242,9 +242,10 @@ function findUserById(userId, facilityId = DEFAULT_FACILITY_ID) {
  * Create a new user in a specific facility
  * Returns { success: boolean, user?: object, error?: string }
  */
-async function createUser({ username, password, role = "viewer", homeFacility }, facilityId = DEFAULT_FACILITY_ID) {
+async function createUser({ id, username, password, role = "viewer", homeFacility }, facilityId = DEFAULT_FACILITY_ID) {
   // facilityId is where the user is being created (the target facility)
   // homeFacility is the user's home facility (stored on user record)
+  // id is optional - if provided (e.g., copying user from another facility), use it; otherwise generate new UUID
   const targetFacility = facilityId;
   const usersData = loadUsers(targetFacility);
 
@@ -273,7 +274,7 @@ async function createUser({ username, password, role = "viewer", homeFacility },
   const passwordHash = await hashPassword(password);
 
   const newUser = {
-    id: uuidv4(),
+    id: id || uuidv4(),
     username,
     passwordHash,
     role,

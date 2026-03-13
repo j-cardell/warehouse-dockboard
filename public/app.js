@@ -422,10 +422,11 @@ async function handlePasswordResetSubmit(e) {
       throw new Error(data.error || 'Failed to set new password');
     }
 
-    // Success - store the new auth token
+    // Success - store the new auth token and user data
     authState.token = data.token;
     authState.isAuthenticated = true;
     authState.tempToken = null;
+    authState.user = data.user;
     localStorage.setItem('dockboard_token', data.token);
 
     // Hide modal and show app

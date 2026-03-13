@@ -419,6 +419,17 @@ router.post("/change-password", requireAuth, async (req, res) => {
     return res.status(400).json({ error: result.error });
   }
 
+  // Sync password to all other facilities where user exists (by same UUID)
+  const { getAllFacilities } = require("../facilities");
+  const allFacilities = getAllFacilities();
+  for (const fac of allFacilities) {
+    if (fac.id === facilityId) continue;
+    const facUser = findUserById(userId, fac.id);
+    if (facUser) {
+      await updateUser(userId, { password: newPassword }, fac.id);
+    }
+  }
+
   res.json({ success: true, message: "Password updated successfully" });
 });
 
@@ -463,14 +474,26 @@ router.post("/set-new-password", async (req, res) => {
       });
     }
 
-    // Update password
+    // Update password at current facility
     const result = await updateUser(userId, { password: newPassword }, facilityId);
 
     if (!result.success) {
       return res.status(500).json({ error: result.error });
     }
 
-    // Clear the password reset requirement
+    // Sync password to all other facilities where user exists (by same UUID)
+    const { getAllFacilities } = require("../facilities");
+    const allFacilities = getAllFacilities();
+    for (const fac of allFacilities) {
+      if (fac.id === facilityId) continue;
+      const facUser = findUserById(userId, fac.id);
+      if (facUser) {
+        await updateUser(userId, { password: newPassword }, fac.id);
+        clearPasswordReset(userId, fac.id);
+      }
+    }
+
+    // Clear the password reset requirement at current facility
     clearPasswordReset(userId, facilityId);
 
     // Now generate a full session token
@@ -561,9 +584,10 @@ router.post("/switch-facility", requireAuth, async (req, res) => {
         const tempPassword = require('crypto').randomBytes(16).toString('hex');
 
         const result = await createUser({
+          id: userId, // Preserve original UUID
           username: req.user.username,
           password: tempPassword,
-          role: "admin", // Always admin when switching
+          role: "admin",
           homeFacility: homeFacility,
         }, facilityId);
 
