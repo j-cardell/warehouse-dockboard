@@ -749,6 +749,11 @@ async function switchFacility(facilityId) {
 
     // Reload page data for new facility
     await fetchState();
+
+    // Reconnect SSE with new facility token
+    disconnectSSE();
+    connectSSE();
+
     await loadSettings();
     renderAll();
   } catch (err) {
