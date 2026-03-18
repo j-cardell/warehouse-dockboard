@@ -98,7 +98,7 @@ router.post("/move-to-door", requireAuth, requireRole("user"), (req, res) => {
         customer: existingTrailer.customer,
         fromDoor: door.number,
         reason: "Replaced by new trailer",
-      }, req.user);
+      }, req.user, facilityId);
     }
   }
 
@@ -243,7 +243,7 @@ router.post("/move-to-door", requireAuth, requireRole("user"), (req, res) => {
       autoAssignedToDoor: autoAssigned.doorNumber,
       autoAssignedCarrier: autoAssigned.carrier,
     }),
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, door, trailer, historyEntry, wasQueued, autoAssigned });
 });
@@ -371,7 +371,7 @@ router.post("/move-to-yard", requireAuth, requireRole("user"), (req, res) => {
       autoAssignedToDoor: autoAssigned.doorNumber,
       autoAssignedCarrier: autoAssigned.carrier,
     }),
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer, historyEntry, autoAssigned });
 });
@@ -482,7 +482,7 @@ router.post("/move-to-yard-slot", requireAuth, requireRole("user"), (req, res) =
     customer: trailer.customer,
     toLocation: `Yard Slot ${slot.number}`,
     slotId: slot.id,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer, slot, historyEntry });
 });
@@ -533,7 +533,7 @@ router.post("/move-from-yard-slot", requireAuth, requireRole("user"), (req, res)
     carrier: trailer.carrier,
     customer: trailer.customer,
     fromSlot: slot?.number,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer, historyEntry });
 });

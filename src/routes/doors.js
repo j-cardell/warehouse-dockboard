@@ -84,7 +84,7 @@ router.put("/:id", requireAuth, requireRole("user"), (req, res) => {
     labelText: door.labelText,
     inService: door.inService,
     type: door.type,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, door });
 });
@@ -126,7 +126,7 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
     doorNumber: newDoor.number,
     doorLabel: newDoor.labelText,
     type: newDoor.type,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, door: newDoor });
 });
@@ -186,7 +186,7 @@ router.delete("/:id", requireAuth, requireRole("user"), (req, res) => {
   addHistoryEntry("DOOR_DELETED", {
     doorId: id,
     doorNumber: door.number,
-  }, req.user);
+  }, req.user, facilityId);
 
   // Add history entries for moved trailers
   if (door.trailerId) {
@@ -199,7 +199,7 @@ router.delete("/:id", requireAuth, requireRole("user"), (req, res) => {
         customer: trailer.customer,
         from: `Door ${door.number}`,
         reason: "Door deleted",
-      }, req.user);
+      }, req.user, facilityId);
     }
   }
 
@@ -213,7 +213,7 @@ router.delete("/:id", requireAuth, requireRole("user"), (req, res) => {
       from: `Queue for Door ${door.number}`,
       to: toLocation,
       reason: "Door deleted",
-    }, req.user);
+    }, req.user, facilityId);
   }
 
   res.json({ success: true });
@@ -280,7 +280,7 @@ router.post("/:id/assign-next", requireAuth, requireRole("user"), (req, res) => 
     customer: trailer.customer,
     toDoor: door.number,
     doorId: door.id,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer, door });
 });

@@ -115,7 +115,7 @@ router.delete("/:id", requireAuth, requireRole("user"), (req, res) => {
   addHistoryEntry("CARRIER_DELETED", {
     carrierId: id,
     carrierName: carrier.name,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true });
 });

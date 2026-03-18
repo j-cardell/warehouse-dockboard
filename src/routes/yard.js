@@ -88,7 +88,7 @@ router.put("/:id", requireAuth, requireRole("user"), (req, res) => {
       slotId: id,
       oldNumber,
       newNumber: number,
-    }, req.user);
+    }, req.user, facilityId);
   }
 
   saveState(state, facilityId);
@@ -128,7 +128,7 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
   addHistoryEntry("YARD_SLOT_CREATED", {
     slotId: newSlot.id,
     number: slotNumber,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, slot: newSlot });
 });
@@ -167,7 +167,7 @@ router.delete("/:id", requireAuth, requireRole("user"), (req, res) => {
   addHistoryEntry("YARD_SLOT_DELETED", {
     slotId: id,
     number: slot.number,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true });
 });

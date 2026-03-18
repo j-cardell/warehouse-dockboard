@@ -109,7 +109,7 @@ router.post("/staging", requireAuth, requireRole("user"), (req, res) => {
     location: "Staging",
     customer: trailer.customer,
     loadNumber: trailer.loadNumber,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer });
 });
@@ -179,7 +179,7 @@ router.post("/queue", requireAuth, requireRole("user"), (req, res) => {
     customer: trailer.customer,
     targetDoor: targetDoorNumber,
     targetDoorId,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer });
 });
@@ -228,7 +228,7 @@ router.post("/queue/:id/cancel", requireAuth, requireRole("user"), (req, res) =>
     carrier: trailer.carrier,
     customer: trailer.customer,
     action: "moved to unassigned yard",
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer });
 });
@@ -270,7 +270,7 @@ router.post("/queue/:id/reassign", requireAuth, requireRole("user"), (req, res) 
     carrier: trailer.carrier,
     fromDoor: oldDoor,
     toDoor: targetDoorNumber,
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer });
 });
@@ -317,7 +317,7 @@ router.post("/appointment-queue", requireAuth, requireRole("user"), (req, res) =
     trailerNumber: trailer.number,
     carrier: trailer.carrier,
     location: "Appointment Queue",
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer });
 });
@@ -365,7 +365,7 @@ router.post("/appointment-queue/:id/cancel", requireAuth, requireRole("user"), (
     trailerNumber: trailer.number,
     carrier: trailer.carrier,
     action: "moved to unassigned yard",
-  }, req.user);
+  }, req.user, facilityId);
 
   res.json({ success: true, trailer });
 });
