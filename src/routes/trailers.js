@@ -302,7 +302,7 @@ router.put("/:id", requireAuth, requireRole("user"), (req, res) => {
   saveState(state, facilityId);
 
   // Broadcast update to all clients
-  broadcastStateChange("trailer", "update", { trailer, changes });
+  broadcastStateChange("trailer", "update", { trailer, changes }, facilityId);
 
   const historyDetails = {
     trailerId: trailer.id,
@@ -415,7 +415,7 @@ router.delete("/:id", requireAuth, requireRole("user"), (req, res) => {
   saveState(state, facilityId);
 
   // Broadcast deletion to all clients
-  broadcastStateChange("trailer", "delete", { trailerId: id, trailer });
+  broadcastStateChange("trailer", "delete", { trailerId: id, trailer }, facilityId);
 
   addHistoryEntry("TRAILER_DELETED", {
     trailerId: id,
@@ -548,7 +548,7 @@ router.post("/:id/ship", requireAuth, requireRole("user"), (req, res) => {
   saveState(state, facilityId);
 
   // Broadcast ship event to all clients
-  broadcastStateChange("trailer", "ship", { trailerId: id, trailer, autoAssigned });
+  broadcastStateChange("trailer", "ship", { trailerId: id, trailer, autoAssigned }, facilityId);
 
   addHistoryEntry("TRAILER_SHIPPED", {
     trailerId: trailer.id,
@@ -589,7 +589,7 @@ router.delete("/shipped/:id", requireAuth, requireRole("user"), (req, res) => {
   saveState(state, facilityId);
 
   // Broadcast shipped trailer deletion to all clients
-  broadcastStateChange("trailer", "delete", { trailerId: id, trailer: shippedTrailer, type: "shipped" });
+  broadcastStateChange("trailer", "delete", { trailerId: id, trailer: shippedTrailer, type: "shipped" }, facilityId);
 
   addHistoryEntry("SHIPPED_DELETED", {
     trailerId: id,

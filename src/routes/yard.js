@@ -52,7 +52,7 @@ router.post("/reorder", requireAuth, requireRole("user"), (req, res) => {
   state.yardSlots = reorderedSlots;
   saveState(state, facilityId);
 
-  broadcastStateChange("yard", "update", { slots: state.yardSlots });
+  broadcastStateChange("yard", "update", { slots: state.yardSlots }, facilityId);
 
   res.json({ success: true, slots: state.yardSlots });
 });
@@ -93,7 +93,7 @@ router.put("/:id", requireAuth, requireRole("user"), (req, res) => {
 
   saveState(state, facilityId);
 
-  broadcastStateChange("yard", "update", { slot });
+  broadcastStateChange("yard", "update", { slot }, facilityId);
 
   res.json({ success: true, slot });
 });
@@ -123,7 +123,7 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
   state.yardSlots.push(newSlot);
   saveState(state, facilityId);
 
-  broadcastStateChange("yard", "create", { slot: newSlot });
+  broadcastStateChange("yard", "create", { slot: newSlot }, facilityId);
 
   addHistoryEntry("YARD_SLOT_CREATED", {
     slotId: newSlot.id,
@@ -162,7 +162,7 @@ router.delete("/:id", requireAuth, requireRole("user"), (req, res) => {
   state.yardSlots.splice(slotIndex, 1);
   saveState(state, facilityId);
 
-  broadcastStateChange("yard", "delete", { slotId: id, slot });
+  broadcastStateChange("yard", "delete", { slotId: id, slot }, facilityId);
 
   addHistoryEntry("YARD_SLOT_DELETED", {
     slotId: id,

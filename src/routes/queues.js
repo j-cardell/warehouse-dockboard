@@ -220,7 +220,7 @@ router.post("/queue/:id/cancel", requireAuth, requireRole("user"), (req, res) =>
   saveState(state, facilityId);
 
   // Broadcast update
-  broadcastStateChange("queues", "update", { state });
+  broadcastStateChange("queues", "update", { state }, facilityId);
 
   addHistoryEntry("TRAILER_UNQUEUED", {
     trailerId: trailer.id,
@@ -262,7 +262,7 @@ router.post("/queue/:id/reassign", requireAuth, requireRole("user"), (req, res) 
   saveState(state, facilityId);
 
   // Broadcast update
-  broadcastStateChange("queues", "update", { state });
+  broadcastStateChange("queues", "update", { state }, facilityId);
 
   addHistoryEntry("TRAILER_REASSIGNED", {
     trailerId: trailer.id,
@@ -310,7 +310,7 @@ router.post("/appointment-queue", requireAuth, requireRole("user"), (req, res) =
   saveState(state, facilityId);
 
   // Broadcast update
-  broadcastStateChange("queues", "update", { state });
+  broadcastStateChange("queues", "update", { state }, facilityId);
 
   addHistoryEntry("TRAILER_QUEUED_APPT", {
     trailerId: trailer.id,
@@ -358,7 +358,7 @@ router.post("/appointment-queue/:id/cancel", requireAuth, requireRole("user"), (
   saveState(state, facilityId);
 
   // Broadcast update
-  broadcastStateChange("queues", "update", { state });
+  broadcastStateChange("queues", "update", { state }, facilityId);
 
   addHistoryEntry("TRAILER_UNQUEUED_APPT", {
     trailerId: trailer.id,
@@ -398,7 +398,7 @@ router.post("/appointment-queue/reorder", requireAuth, requireRole("user"), (req
   saveState(state, facilityId);
 
   // Broadcast update
-  broadcastStateChange("queues", "update", { state });
+  broadcastStateChange("queues", "update", { state }, facilityId);
 
   res.json({ success: true });
 });
