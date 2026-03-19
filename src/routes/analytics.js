@@ -18,7 +18,7 @@ const express = require("express");
 const router = express.Router();
 const { requireAuth, requireRole } = require("../middleware");
 const { MULTI_FACILITY_MODE } = require("../config");
-const { getAllFacilities } = require("../facilities");
+const { getAllFacilities, getFacility } = require("../facilities");
 const {
   loadState,
   loadSettings,
@@ -173,7 +173,14 @@ router.get("/", requireAuth, (req, res) => {
   // Calculate today's data if missing (only for current facility, not combined)
   const today = now.toISOString().split("T")[0];
   if (!isCombined && !analytics.dailyStats?.[today]) {
-    const todaysStats = calculateDailyDwell(today, facilityIds[0]);
+    const facility = getFacility(facilityIds[0]);
+    // Get timezone from facility config (multi-facility) or settings (single facility)
+    let timezone = facility?.config?.timezone;
+    if (!timezone) {
+      const settings = loadSettings(facilityIds[0]);
+      timezone = settings?.timezone || "UTC";
+    }
+    const todaysStats = calculateDailyDwell(today, facilityIds[0], timezone);
     if (todaysStats) {
       analytics.dailyStats[today] = todaysStats;
     }
@@ -344,7 +351,9 @@ router.get("/violations", requireAuth, (req, res) => {
     let combinedData = [];
     if (isCombined) {
       facilityIds.forEach(id => {
-        const violations = getDwellViolations(period, id);
+        const facility = getFacility(id);
+        const timezone = facility?.config?.timezone || "UTC";
+        const violations = getDwellViolations(period, id, timezone);
         violations.forEach(v => {
           v._facility = id; // Tag with facility
         });
@@ -376,7 +385,20 @@ router.get("/violations", requireAuth, (req, res) => {
       combinedData.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 
-    const data = isCombined ? combinedData : getDwellViolations(period, facilityIds[0]);
+    // For single facility, get timezone and pass to analytics
+    let data;
+    if (isCombined) {
+      data = combinedData;
+    } else {
+      const facility = getFacility(facilityIds[0]);
+      // Get timezone from facility config (multi-facility) or settings (single facility)
+      let timezone = facility?.config?.timezone;
+      if (!timezone) {
+        const settings = loadSettings(facilityIds[0]);
+        timezone = settings?.timezone || "UTC";
+      }
+      data = getDwellViolations(period, facilityIds[0], timezone);
+    }
 
     res.json({
       period,

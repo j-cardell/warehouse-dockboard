@@ -105,7 +105,18 @@ router.post("/", requireAuth, async (req, res) => {
     yardStart = 1,
     facilityName,
     facilityId: customFacilityId,
+    timezone = "UTC",
   } = req.body;
+
+  // Validate facility ID format if provided (uppercase letters, numbers, hyphens only)
+  if (customFacilityId) {
+    const validFacilityId = /^[A-Z0-9\-]+$/.test(customFacilityId);
+    if (!validFacilityId) {
+      return res.status(400).json({
+        error: "Facility ID must contain only uppercase letters (A-Z), numbers (0-9), and hyphens (-)"
+      });
+    }
+  }
 
   // Validate inputs
   if (typeof numDoors !== "number" || numDoors < 0 || numDoors > 500) {
@@ -154,6 +165,7 @@ router.post("/", requireAuth, async (req, res) => {
           yardSlotCount: numYardSlots,
           dumpsterCount: numDumpsters,
           rampCount: numRamps,
+          timezone,
         },
         id: customFacilityId,
       });
@@ -218,7 +230,11 @@ router.post("/", requireAuth, async (req, res) => {
 
     // Preserve existing settings if they exist, otherwise use defaults
     if (!fs.existsSync(SETTINGS_FILE)) {
-      saveSettings(DEFAULT_SETTINGS);
+      saveSettings({ ...DEFAULT_SETTINGS, timezone });
+    } else {
+      // Update existing settings with timezone
+      const existingSettings = loadSettings();
+      saveSettings({ ...existingSettings, timezone });
     }
 
     console.log("[Setup] Initial configuration created:");

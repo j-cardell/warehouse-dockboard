@@ -109,6 +109,14 @@ async function createFacility(facilityData) {
     return { success: false, error: "Facility name must be at least 2 characters" };
   }
 
+  // Validate custom ID format if provided (uppercase letters, numbers, hyphens only)
+  if (customId) {
+    const validId = /^[A-Z0-9\-]+$/.test(customId);
+    if (!validId) {
+      return { success: false, error: "Facility ID must contain only uppercase letters (A-Z), numbers (0-9), and hyphens (-)" };
+    }
+  }
+
   const facilitiesData = loadFacilities();
 
   // Check for duplicate name
@@ -131,6 +139,7 @@ async function createFacility(facilityData) {
       yardSlotCount: config?.yardSlotCount || 30,
       dumpsterCount: config?.dumpsterCount || 0,
       rampCount: config?.rampCount || 0,
+      timezone: config?.timezone || "UTC",
     },
   };
 

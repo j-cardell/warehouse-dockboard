@@ -102,6 +102,28 @@
                             <input type="number" id="setup-ramps" min="0" max="50" value="0" required>
                             <span class="setup-hint">Ground-level ramp locations</span>
                         </div>
+                        <div class="setup-item" style="grid-column: span 2;">
+                            <label for="setup-timezone">🌍 Timezone</label>
+                            <select id="setup-timezone" required style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; background: var(--background); color: var(--text);">
+                                <option value="UTC">UTC (Coordinated Universal Time)</option>
+                                <option value="America/New_York" selected>America/New_York (Eastern Time)</option>
+                                <option value="America/Chicago">America/Chicago (Central Time)</option>
+                                <option value="America/Denver">America/Denver (Mountain Time)</option>
+                                <option value="America/Los_Angeles">America/Los_Angeles (Pacific Time)</option>
+                                <option value="America/Phoenix">America/Phoenix (Arizona Time)</option>
+                                <option value="America/Anchorage">America/Anchorage (Alaska Time)</option>
+                                <option value="Pacific/Honolulu">Pacific/Honolulu (Hawaii Time)</option>
+                                <option value="Europe/London">Europe/London (GMT/BST)</option>
+                                <option value="Europe/Paris">Europe/Paris (Central European Time)</option>
+                                <option value="Europe/Berlin">Europe/Berlin (Central European Time)</option>
+                                <option value="Asia/Tokyo">Asia/Tokyo (Japan Standard Time)</option>
+                                <option value="Asia/Shanghai">Asia/Shanghai (China Standard Time)</option>
+                                <option value="Asia/Singapore">Asia/Singapore (Singapore Time)</option>
+                                <option value="Australia/Sydney">Australia/Sydney (Eastern Australia)</option>
+                                <option value="Pacific/Auckland">Pacific/Auckland (New Zealand Time)</option>
+                            </select>
+                            <span class="setup-hint">Used for analytics and day boundaries</span>
+                        </div>
                     </div>
                     <div class="setup-summary" id="setup-summary">
                         <p>Total: <strong>57</strong> doors + <strong>30</strong> yard slots</p>

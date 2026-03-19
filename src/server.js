@@ -208,10 +208,22 @@ app.listen(PORT, "0.0.0.0", () => {
 
   let doorCount = 0;
   let yardSlotCount = 0;
+  let facilityCount = 0;
   if (!needsSetup) {
-    const state = loadState();
-    doorCount = state.doors?.length || 0;
-    yardSlotCount = state.yardSlots?.length || 0;
+    if (MULTI_FACILITY_MODE) {
+      // Aggregate across all facilities
+      const facilities = getAllFacilities();
+      facilityCount = facilities.length;
+      facilities.forEach(f => {
+        const state = loadState(f.id);
+        doorCount += state.doors?.length || 0;
+        yardSlotCount += state.yardSlots?.length || 0;
+      });
+    } else {
+      const state = loadState();
+      doorCount = state.doors?.length || 0;
+      yardSlotCount = state.yardSlots?.length || 0;
+    }
   }
 
   const boxWidth = 44;
@@ -225,6 +237,9 @@ app.listen(PORT, "0.0.0.0", () => {
   if (needsSetup) {
     console.log(`║${padLine('  ⚠️  First run - Setup required')}║`);
   } else {
+    if (MULTI_FACILITY_MODE && facilityCount > 0) {
+      console.log(`║${padLine(`  🏭 Facilities: ${facilityCount}`)}║`);
+    }
     console.log(`║${padLine(`  🚪 Doors: ${doorCount}`)}║`);
     console.log(`║${padLine(`  🅿️ Yard Slots: ${yardSlotCount}  `)} ║`);
   }

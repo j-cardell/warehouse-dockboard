@@ -2250,7 +2250,7 @@ async function showAnalyticsModal() {
   modal.innerHTML = `
     <div class="modal-content modal-large">
       <div class="modal-header">
-        <h3>📊 Dwell Time Analytics</h3>
+        <h3>📊 Analytics</h3>
         <button class="close-modal">&times;</button>
       </div>
       <div class="modal-body">
@@ -7627,8 +7627,9 @@ function showSetupModal(isNewFacility = false) {
         numRamps: parseInt(document.getElementById('setup-ramps').value) || 0,
         doorStart: parseInt(document.getElementById('setup-doors-start')?.value) || 1,
         yardStart: parseInt(document.getElementById('setup-yard-start')?.value) || 1,
-        facilityName: document.getElementById('setup-facility-name')?.value || undefined,
-        facilityId: document.getElementById('setup-facility-id')?.value || undefined
+        facilityName: document.getElementById('setup-facility-name')?.value?.replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()) || undefined,
+        facilityId: document.getElementById('setup-facility-id')?.value?.toUpperCase() || undefined,
+        timezone: document.getElementById('setup-timezone')?.value || 'America/New_York'
       };
 
       submitBtn.disabled = true;
@@ -7849,7 +7850,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!editMode && !await showConfirmModal({ title: 'Edit Mode Activation', html: '<div style="text-align: left;"><p style="margin: 0 0 1rem 0; color: var(--text-secondary);">Welcome to the danger zone. In Edit Mode, you have the power to:</p><ul style="margin: 0 0 1.25rem 0; padding-left: 1.25rem; color: var(--text-secondary); line-height: 1.7;"><li>Delete doors (trailers inside will be moved to unassigned yard)</li><li>Add/remove yard slots</li><li>Rearrange the door grid layout</li><li>Manage carriers and clear analytics data</li></ul><p style="margin: 0 0 0.75rem 0; color: #f59e0b; font-weight: 500;">⚠️ These changes are immediate and permanent.</p><p style="margin: 0; color: var(--text-muted); font-size: 0.875rem;">There is no "undo" button for bad decisions. Proceed only if you know what you\'re doing.</p></div>', type: 'warning', confirmText: 'Enter Edit Mode', cancelText: 'Cancel' })) return;
     editMode = !editMode;
     const btn = document.getElementById('btn-edit-mode');
-    if (btn) { btn.textContent = editMode ? '✅ Done Editing' : '✏️ Edit Mode'; btn.classList.toggle('btn-warning'); btn.classList.toggle('btn-success'); }
+    if (btn) { btn.textContent = editMode ? '✅ Done Editing' : '✏️ Edit'; btn.classList.toggle('btn-warning'); btn.classList.toggle('btn-success'); }
     document.body.classList.toggle('edit-mode-active', editMode);
     renderDoors();
     renderYardSlots();
@@ -8384,6 +8385,28 @@ function showCreateFacilityModal() {
             <input type="number" id="facility-yard-slots" value="30" min="0" max="500" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem;">
           </div>
         </div>
+        <div style="margin-bottom: 1rem;">
+          <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Timezone</label>
+          <select id="facility-timezone" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 0.25rem; background: var(--background);">
+            <option value="UTC">UTC (Coordinated Universal Time)</option>
+            <option value="America/New_York">America/New_York (Eastern Time)</option>
+            <option value="America/Chicago">America/Chicago (Central Time)</option>
+            <option value="America/Denver">America/Denver (Mountain Time)</option>
+            <option value="America/Los_Angeles">America/Los_Angeles (Pacific Time)</option>
+            <option value="America/Phoenix">America/Phoenix (Arizona Time)</option>
+            <option value="America/Anchorage">America/Anchorage (Alaska Time)</option>
+            <option value="Pacific/Honolulu">Pacific/Honolulu (Hawaii Time)</option>
+            <option value="Europe/London">Europe/London (GMT/BST)</option>
+            <option value="Europe/Paris">Europe/Paris (Central European Time)</option>
+            <option value="Europe/Berlin">Europe/Berlin (Central European Time)</option>
+            <option value="Asia/Tokyo">Asia/Tokyo (Japan Standard Time)</option>
+            <option value="Asia/Shanghai">Asia/Shanghai (China Standard Time)</option>
+            <option value="Asia/Singapore">Asia/Singapore (Singapore Time)</option>
+            <option value="Australia/Sydney">Australia/Sydney (Eastern Australia)</option>
+            <option value="Pacific/Auckland">Pacific/Auckland (New Zealand Time)</option>
+          </select>
+          <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Used for analytics reporting and day boundaries</div>
+        </div>
         <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--background-light); border-radius: 0.25rem;">
           <div style="font-weight: 500; margin-bottom: 0.5rem;">Initial Admin User</div>
           <div style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Create an admin user for this facility</div>
@@ -8406,10 +8429,11 @@ function showCreateFacilityModal() {
     const errorDiv = document.getElementById('create-facility-error');
     errorDiv?.classList.add('hidden');
 
-    const name = document.getElementById('facility-name')?.value;
+    const name = document.getElementById('facility-name')?.value?.replace(/\w\S*/g, txt => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
     const description = document.getElementById('facility-description')?.value;
     const doorCount = parseInt(document.getElementById('facility-doors')?.value) || 57;
     const yardSlotCount = parseInt(document.getElementById('facility-yard-slots')?.value) || 30;
+    const timezone = document.getElementById('facility-timezone')?.value || 'UTC';
     const adminUsername = document.getElementById('facility-admin-username')?.value;
     const adminPassword = document.getElementById('facility-admin-password')?.value;
 
@@ -8423,7 +8447,7 @@ function showCreateFacilityModal() {
         body: JSON.stringify({
           name,
           description,
-          config: { doorCount, yardSlotCount },
+          config: { doorCount, yardSlotCount, timezone },
           adminUsername,
           adminPassword
         })

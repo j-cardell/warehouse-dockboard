@@ -5,6 +5,25 @@ const {
 const { ANALYTICS_FILE } = require("./config");
 const fs = require("fs");
 
+// Helper: Get date string in facility's timezone
+function getDateInTimezone(date, timezone = "UTC") {
+  if (timezone === "UTC") {
+    return date.toISOString().split("T")[0];
+  }
+  // Format date in facility's timezone
+  return date.toLocaleDateString("en-CA", { timeZone: timezone }); // YYYY-MM-DD format
+}
+
+// Helper: Get start of day in facility's timezone (as timestamp)
+function getDayStartInTimezone(dateStr, timezone = "UTC") {
+  if (timezone === "UTC") {
+    return new Date(dateStr + "T00:00:00Z").getTime();
+  }
+  // Parse the date in facility's timezone
+  const [year, month, day] = dateStr.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getTime();
+}
+
 function getEffectiveDwellHours(
   createdAt,
   resets = [],
@@ -46,11 +65,13 @@ function resetDwellTime(trailer) {
   trailer.createdAt = new Date().toISOString();
 }
 
-function calculateDailyDwell(date, facilityId = null) {
+function calculateDailyDwell(date, facilityId = null, timezone = "UTC") {
   const dateStr =
-    typeof date === "string" ? date : date.toISOString().split("T")[0];
-  const dayStart = new Date(dateStr + "T00:00:00").getTime();
-  const dayEnd = new Date(dateStr + "T23:59:59").getTime();
+    typeof date === "string" ? date : getDateInTimezone(date, timezone);
+
+  // Calculate day boundaries in facility's timezone
+  const dayStart = getDayStartInTimezone(dateStr, timezone);
+  const dayEnd = dayStart + (24 * 60 * 60 * 1000) - 1; // End of day in facility timezone
 
   const state = loadState(facilityId);
   const history = require("./state").loadHistory(facilityId);
@@ -262,21 +283,22 @@ function calculateDailyDwell(date, facilityId = null) {
   return analytics.dailyStats[dateStr];
 }
 
-function recordDwellSnapshot(facilityId = null) {
-  const today = new Date().toISOString().split("T")[0];
-  calculateDailyDwell(today, facilityId);
+function recordDwellSnapshot(facilityId = null, timezone = "UTC") {
+  const today = getDateInTimezone(new Date(), timezone);
+  calculateDailyDwell(today, facilityId, timezone);
 }
 
-function getDwellViolations(period = "day", facilityId = null) {
+function getDwellViolations(period = "day", facilityId = null, timezone = "UTC") {
   const analytics = loadAnalytics(facilityId);
   const now = new Date();
   const result = [];
 
   if (period === "day") {
     for (let i = 6; i >= 0; i--) {
+      // Calculate date in facility's timezone
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const dateKey = d.toISOString().split("T")[0];
+      const dateKey = getDateInTimezone(d, timezone);
 
       // Calculate if not exists or recalculate if data looks wrong
       // (detect old buggy data where violations equaled total count,
@@ -287,12 +309,18 @@ function getDwellViolations(period = "day", facilityId = null) {
           (dayStats.violations > 0 && dayStats.violations === dayStats.count) ||
           (dayStats.violators && dayStats.violators.length < dayStats.violations) ||
           hasMissingFields) {
-        dayStats = calculateDailyDwell(dateKey, facilityId);
+        dayStats = calculateDailyDwell(dateKey, facilityId, timezone);
       }
+
+      // Get weekday in facility's timezone
+      const weekday = d.toLocaleDateString("en-US", {
+        weekday: "short",
+        timeZone: timezone
+      });
 
       result.push({
         date: dateKey,
-        label: d.toLocaleDateString("en-US", { weekday: "short" }),
+        label: weekday,
         count: dayStats?.violations || 0,
         avgDwell: dayStats?.avgDwell || 0,
         trailers: dayStats?.violators || [],
