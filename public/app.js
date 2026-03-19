@@ -41,8 +41,9 @@ let fetchErrorShown = false;
 let consecutiveErrors = 0;
 let isPaused = false;
 const MAX_CONSECUTIVE_ERRORS = 5;
-const NORMAL_POLL_INTERVAL = 5000;
-const ERROR_POLL_INTERVAL = 30000; // Slow down on errors
+const NORMAL_POLL_INTERVAL = 60000; // Poll every 60s for data consistency
+const ERROR_POLL_INTERVAL = 300000; // 5 min on errors
+const DWELL_UPDATE_INTERVAL = 10000; // Update dwell display every 10s
 
 // SSE (Server-Sent Events) for real-time updates
 let sseConnection = null;
@@ -631,6 +632,8 @@ function updateAuthUI() {
       clearInterval(pollingInterval);
       pollingInterval = null;
     }
+    stopDwellTimer();
+    disconnectSSE();
   }
 
 }
@@ -3469,6 +3472,15 @@ function startPolling() {
   renderAll(); // Render empty grid immediately
   fetchState(); // Then fetch real data
   connectSSE(); // Start SSE connection for real-time updates
+
+  // Start polling interval for data consistency (runs alongside SSE)
+  if (!pollingInterval) {
+    pollingInterval = setInterval(fetchState, NORMAL_POLL_INTERVAL);
+    console.log('[Polling] Started with interval:', NORMAL_POLL_INTERVAL + 'ms');
+  }
+
+  // Start client-side dwell timer for smooth UI updates
+  startDwellTimer();
 }
 
 // ============================================================================
@@ -3499,11 +3511,8 @@ function connectSSE() {
     sseConnection.onopen = () => {
       console.log('[SSE] Connected successfully');
       sseReconnectAttempts = 0;
-      // Stop fallback polling if running
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-      }
+      // Keep polling running for dwell timer updates
+      // Polling and SSE work together: SSE for instant updates, polling for time-based updates
     };
 
     sseConnection.onmessage = (event) => {
@@ -3566,6 +3575,80 @@ function disconnectSSE() {
     sseConnection.close();
     sseConnection = null;
     console.log('[SSE] Disconnected');
+  }
+}
+
+// Client-side dwell timer - updates display without server requests
+let dwellTimerInterval = null;
+function startDwellTimer() {
+  if (dwellTimerInterval) return; // Already running
+
+  dwellTimerInterval = setInterval(() => {
+    const now = Date.now();
+
+    // Update door dwell badges
+    document.querySelectorAll('.trailer-card[data-trailer-id]').forEach(card => {
+      const trailerId = card.dataset.trailerId;
+      const trailer = state.trailers.find(t => t.id === trailerId);
+      if (!trailer?.createdAt) return;
+
+      const badge = card.querySelector('.dwell-badge');
+      if (!badge) return;
+
+      const hours = Math.floor((now - new Date(trailer.createdAt).getTime()) / (1000 * 60 * 60));
+      const minutes = Math.floor((now - new Date(trailer.createdAt).getTime()) / (1000 * 60)) % 60;
+
+      // Update text
+      if (hours < 1) {
+        badge.textContent = `⏱️ ${minutes}m`;
+      } else if (hours < 6) {
+        badge.textContent = `⏱️ ${hours}h ${minutes}m`;
+      } else {
+        badge.textContent = `⏱️ 6h+`;
+      }
+
+      // Update warning classes
+      card.classList.remove('dwell-warning', 'dwell-critical');
+      badge.classList.remove('dwell-warning', 'dwell-critical');
+      if (hours >= 2) {
+        card.classList.add('dwell-critical');
+        badge.classList.add('dwell-critical');
+      } else if (hours >= 1) {
+        card.classList.add('dwell-warning');
+        badge.classList.add('dwell-warning');
+      }
+    });
+
+    // Update unassigned yard dwell displays
+    document.querySelectorAll('.unassigned-item[data-trailer-id]').forEach(item => {
+      const trailerId = item.dataset.trailerId;
+      const trailer = state.yardTrailers.find(t => t.id === trailerId);
+      if (!trailer?.createdAt) return;
+
+      const dwellSpan = item.querySelector('.unassigned-detail span[class*="dwell"]');
+      if (!dwellSpan) return;
+
+      const hours = Math.floor((now - new Date(trailer.createdAt).getTime()) / (1000 * 60 * 60));
+      dwellSpan.textContent = `${hours}h`;
+
+      // Update warning classes
+      dwellSpan.classList.remove('dwell-warning', 'dwell-critical');
+      if (hours >= 2) {
+        dwellSpan.classList.add('dwell-critical');
+      } else if (hours >= 1) {
+        dwellSpan.classList.add('dwell-warning');
+      }
+    });
+  }, DWELL_UPDATE_INTERVAL);
+
+  console.log('[DwellTimer] Started with interval:', DWELL_UPDATE_INTERVAL + 'ms');
+}
+
+function stopDwellTimer() {
+  if (dwellTimerInterval) {
+    clearInterval(dwellTimerInterval);
+    dwellTimerInterval = null;
+    console.log('[DwellTimer] Stopped');
   }
 }
 
