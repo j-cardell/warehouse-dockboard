@@ -117,6 +117,7 @@ async function requireAuth(req, res, next) {
         email: decoded.email,
         homeFacility: decoded.homeFacility,
         currentFacility: decoded.currentFacility,
+        isVisiting: decoded.isVisiting || false,
       };
       return next();
     } catch (err) {
@@ -156,6 +157,7 @@ async function requireAuth(req, res, next) {
           email: user.email,
           homeFacility: user.homeFacility || facilityId,
           currentFacility: facilityId,
+          isVisiting: false,
         };
         return next();
       }
