@@ -8059,8 +8059,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const password = document.getElementById('new-user-password')?.value;
         const role = document.getElementById('new-user-role')?.value;
 
+        // Password not required for loader role
+        const payload = { username, role };
+        if (role !== 'loader') {
+          payload.password = password;
+        }
+
         try {
-          const res = await apiCall('/users', 'POST', { username, password, role });
+          const res = await apiCall('/users', 'POST', payload);
           showToast(`User "${res.username}" created`, 'success');
           form.reset();
           await renderUsersList();

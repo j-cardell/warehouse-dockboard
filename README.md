@@ -49,6 +49,7 @@ A real-time dock management application for warehouses, distribution centers, an
 
 ### Advanced Features
 - **Auto-Assignment** - Automatically assigns next trailer from queue when door clears
+- **Dwell Time Tracking** - Tracks how long trailers sit at dock doors (6-hour max display)
 - **Carrier Management** - Registry with favorites and usage tracking
 - **Canvas-Based Analytics** - No external chart dependencies
 
@@ -73,7 +74,6 @@ npm install
 # Configure environment
 cp .env.example .env
 # Edit .env with your secure values:
-# - AUTH_USER: dockadmin or your desired username
 # - AUTH_PASS: your secure password (min 8 chars)
 # - JWT_SECRET: run `openssl rand -hex 32` to generate
 
@@ -223,12 +223,11 @@ Admins manage users through the user menu (top right) → "Manage Users":
 
 **Password Resets:**
 - Admin clicks "Reset Password" → confirms "Require password reset?"
-- Admin is provided a temporary password → Admin provides password to user.
-- User is **forced to set new password on next login** (log in with temporary password, then immediate prompt for new password)
+- User is **forced to set new password on next login** (any password works, then immediate prompt for new password)
 - No SMTP/email needed - assumes user requested through other channels
 - **Password reset flag expires in 10 minutes**
 
-**Security Note:** Only the **bootstrap admin** (`AUTH_USER` env var) can reset another admin's password. Bootstrap admin password must be changed via environment variables. 
+**Security Note:** Only the **bootstrap admin** (`AUTH_USER` env var) can reset another admin's password. Bootstrap admin password must be changed via environment variables.
 
 ### Demo Data Generation
 
@@ -255,7 +254,7 @@ Click "Edit" button to enable configuration changes:
 **Facility Switching:**
 - Admins can switch facilities via user menu → "Switch Facility"
 - JWT regenerated with new facility context
-- History entries tagged with origin facility (jsmith@faciltyId)
+- History entries tagged with origin facility
 
 **Creating Facilities:**
 - Bootstrap admin can create new facilities
@@ -277,7 +276,7 @@ Click "Edit" button to enable configuration changes:
 | Auth | JWT with Basic auth fallback |
 | Real-Time | Server-Sent Events (SSE) |
 
-**Why JSON files?** No database server to configure, backup, or manage. Data is human-readable, portable, and stored directly in the filesystem. Simply copy the `data/` directory to migrate or archive. Perfect for single-facility or small multi-facility deployments where simplicity and minimal infrastructure matters more than concurrent access patterns.
+**Why JSON files?** No database server to configure, backup, or manage. Data is human-readable, portable, and stored directly in the filesystem. Simply copy the `data/` directory to migrate or archive. Perfect for single-facility deployments where simplicity and minimal infrastructure matters more than concurrent access patterns.
 
 ### File Structure
 
@@ -356,7 +355,7 @@ The server is organized into modules:
 
 1. **Bootstrap Mode**: If no users exist, first login with `AUTH_USER/AUTH_PASS` auto-creates an admin user
 2. **Normal Login**: Credentials verified against `users.json` (hashed with bcrypt)
-3. **Password Reset Flow**: Admin can trigger reset; user must log in with the temp password, then set new password
+3. **Password Reset Flow**: Admin can trigger reset; user must verify temp password, then set new password
 4. **Token Generation**: JWT contains userId, username, role, homeFacility, currentFacility, isVisiting flag
 5. **Token Validation**: `requireAuth` middleware validates Bearer tokens on protected routes
 
@@ -776,11 +775,11 @@ curl http://localhost:3456/api/health
 ### Generate Demo Data
 
 ```bash
-# Generate trailers with history
-node scripts/generate-demo-data.js 
+# Generate 50 trailers with history
+node scripts/generate-demo-data.js 50
 
 # Generate for specific facility
-node scripts/generate-demo-data.js facility-id
+node scripts/generate-demo-data.js 50 facility-id
 ```
 
 ### File Locations

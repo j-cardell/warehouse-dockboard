@@ -59,9 +59,16 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
   const { username, password, role } = req.body;
   const facilityId = req.user?.currentFacility || req.user?.homeFacility;
 
-  if (!username || !password) {
+  if (!username) {
     return res.status(400).json({
-      error: "Username and password required",
+      error: "Username required",
+    });
+  }
+
+  // Password not required for loader role
+  if (role !== "loader" && !password) {
+    return res.status(400).json({
+      error: "Password required for non-loader users",
     });
   }
 

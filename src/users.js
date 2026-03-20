@@ -259,19 +259,24 @@ async function createUser({ id, username, password, role = "viewer", homeFacilit
     return { success: false, error: "Username already exists in this facility" };
   }
 
-  // Validate password
-  if (!password || password.length < 8) {
-    return { success: false, error: "Password must be at least 8 characters" };
+  // Validate password (not required for loader role)
+  let passwordHash = null;
+  if (role === "loader") {
+    // Loaders don't use passwords - they select their name on tablet
+    // Generate a random hash that can't be used for login
+    passwordHash = "LOADER_NO_PASSWORD_" + uuidv4();
+  } else {
+    if (!password || password.length < 8) {
+      return { success: false, error: "Password must be at least 8 characters" };
+    }
+    passwordHash = await hashPassword(password);
   }
 
   // Validate role
-  const validRoles = ["admin", "user", "viewer"];
+  const validRoles = ["admin", "user", "viewer", "loader"];
   if (!validRoles.includes(role)) {
     return { success: false, error: "Invalid role" };
   }
-
-  // Hash password
-  const passwordHash = await hashPassword(password);
 
   const newUser = {
     id: id || uuidv4(),
@@ -312,7 +317,7 @@ async function updateUser(userId, updates, facilityId = DEFAULT_FACILITY_ID) {
 
   // Update allowed fields
   if (updates.role !== undefined) {
-    const validRoles = ["admin", "user", "viewer"];
+    const validRoles = ["admin", "user", "viewer", "loader"];
     if (!validRoles.includes(updates.role)) {
       return { success: false, error: "Invalid role" };
     }
@@ -360,7 +365,7 @@ async function updateGlobalUser(userId, updates) {
 
   // Update allowed fields
   if (updates.role !== undefined) {
-    const validRoles = ["admin", "user", "viewer"];
+    const validRoles = ["admin", "user", "viewer", "loader"];
     if (!validRoles.includes(updates.role)) {
       return { success: false, error: "Invalid role" };
     }
@@ -405,7 +410,7 @@ async function updateGlobalUser(userId, updates) {
 
   // Update allowed fields
   if (updates.role !== undefined) {
-    const validRoles = ["admin", "user", "viewer"];
+    const validRoles = ["admin", "user", "viewer", "loader"];
     if (!validRoles.includes(updates.role)) {
       return { success: false, error: "Invalid role" };
     }
@@ -453,7 +458,7 @@ async function updateGlobalUser(userId, updates) {
 
   // Update allowed fields
   if (updates.role !== undefined) {
-    const validRoles = ["admin", "user", "viewer"];
+    const validRoles = ["admin", "user", "viewer", "loader"];
     if (!validRoles.includes(updates.role)) {
       return { success: false, error: "Invalid role" };
     }

@@ -151,6 +151,7 @@ app.get("/api/health", (req, res) =>
 );
 app.use("/api/state", require("./routes/state"));
 app.use("/api/history", require("./routes/history"));
+app.use("/api/loader", require("./routes/loader"));
 
 // Trailers routes (mounted at multiple paths)
 const trailersRouter = require("./routes/trailers");
@@ -193,6 +194,37 @@ app.get("/api/events", handleSSE);
 
 // Static files - serves the vanilla JavaScript SPA frontend from public/
 app.use(express.static(path.join(__dirname, "../public")));
+
+// Loader interface route
+app.get("/loader", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/loader.html"));
+});
+
+// Redirect loaders away from main app - they must use /loader
+app.use((req, res, next) => {
+  // Skip API routes and loader page
+  if (req.path.startsWith("/api/") || req.path === "/loader") {
+    return next();
+  }
+
+  // Check if user has loader role via token
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.substring(7);
+    try {
+      const jwt = require("jsonwebtoken");
+      const { JWT_SECRET } = require("./config");
+      const decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.role === "loader") {
+        // Loader trying to access main app - redirect to loader interface
+        return res.redirect("/loader");
+      }
+    } catch (err) {
+      // Invalid token, let normal auth handle it
+    }
+  }
+  next();
+});
 
 // Start server - bind to 0.0.0.0 to accept connections from outside container
 app.listen(PORT, "0.0.0.0", () => {
