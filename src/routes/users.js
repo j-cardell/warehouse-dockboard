@@ -16,6 +16,8 @@ const {
   findUserByUsername,
   isBootstrapAdmin,
   findGlobalUserByUsername,
+  loadUsers,
+  saveUsers,
 } = require("../users");
 
 /**
@@ -136,18 +138,6 @@ router.post("/:id/reset-password", requireAuth, requireAdmin, async (req, res) =
     return res.status(404).json({ error: "User not found" });
   }
 
-  // Check if target is an admin
-  if (targetUser.role === "admin") {
-    // Only bootstrap admin can reset other admin passwords
-    const bootstrapUser = findGlobalUserByUsername(requestingUser.username);
-    if (!isBootstrapAdmin(bootstrapUser)) {
-      return res.status(403).json({
-        error: "Only the bootstrap admin can reset other admin passwords",
-        code: "FORBIDDEN",
-      });
-    }
-  }
-
   // Can't reset bootstrap admin password via UI (must change via env/export)
   if (isBootstrapAdmin(targetUser)) {
     return res.status(403).json({
@@ -156,19 +146,20 @@ router.post("/:id/reset-password", requireAuth, requireAdmin, async (req, res) =
     });
   }
 
-  // Can't reset your own password this way (use change-password instead)
-  if (requestingUser.userId === targetUserId) {
-    return res.status(400).json({
-      error: "Use the change password feature to reset your own password",
-    });
-  }
-
-  // Can't reset the bootstrap admin's password from UI (must be done via env)
-  if (isBootstrapAdmin(targetUser)) {
-    return res.status(403).json({
-      error: "Bootstrap admin password must be changed via environment variable",
-      code: "FORBIDDEN",
-    });
+  // Check if target is an admin
+  if (targetUser.role === "admin") {
+    // Check if trying to reset another admin (not self)
+    if (requestingUser.userId !== targetUserId) {
+      // Only bootstrap admin can reset other admin passwords
+      const bootstrapUser = findGlobalUserByUsername(requestingUser.username);
+      if (!isBootstrapAdmin(bootstrapUser)) {
+        return res.status(403).json({
+          error: "Only the bootstrap admin can reset other admin passwords",
+          code: "FORBIDDEN",
+        });
+      }
+    }
+    // Admin resetting their own password is allowed (forgot password scenario)
   }
 
   const result = requirePasswordReset(targetUserId, facilityId);
@@ -179,7 +170,6 @@ router.post("/:id/reset-password", requireAuth, requireAdmin, async (req, res) =
 
   // Sync password reset requirement to all other facilities where user exists
   const { getAllFacilities } = require("../facilities");
-  const { findUserById, saveUsers, loadUsers } = require("../users");
   const allFacilities = getAllFacilities();
   for (const fac of allFacilities) {
     if (fac.id === facilityId) continue;
