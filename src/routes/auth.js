@@ -206,7 +206,14 @@ router.post("/login", loginLimiter, async (req, res) => {
   }
 
   // Verify password for normal login (no reset required)
-  const validPassword = await verifyPassword(password, user.passwordHash);
+  let validPassword = false;
+  if (user.passwordHash?.startsWith("TABLET_")) {
+    // Loading-tablet users use plaintext 6-digit PIN
+    validPassword = user.passwordHash === "TABLET_" + password;
+  } else {
+    // Standard bcrypt password verification
+    validPassword = await verifyPassword(password, user.passwordHash);
+  }
 
   if (!validPassword) {
     await new Promise((resolve) => setTimeout(resolve, 1000));

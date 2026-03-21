@@ -259,12 +259,20 @@ async function createUser({ id, username, password, role = "viewer", homeFacilit
     return { success: false, error: "Username already exists in this facility" };
   }
 
-  // Validate password (not required for loader role)
+  // Validate password/PIN
   let passwordHash = null;
   if (role === "loader") {
     // Loaders don't use passwords - they select their name on tablet
     // Generate a random hash that can't be used for login
     passwordHash = "LOADER_NO_PASSWORD_" + uuidv4();
+  } else if (role === "loading-tablet") {
+    // Loading-tablet users use a 6-digit PIN
+    if (!password || !/^\d{6}$/.test(password)) {
+      return { success: false, error: "Loading-tablet requires a 6-digit PIN" };
+    }
+    // Store PIN in plaintext for tablet (like a device code, not a secure password)
+    // Prepend with TABLET_ so we know to compare as PIN not bcrypt
+    passwordHash = "TABLET_" + password;
   } else {
     if (!password || password.length < 8) {
       return { success: false, error: "Password must be at least 8 characters" };
@@ -273,7 +281,7 @@ async function createUser({ id, username, password, role = "viewer", homeFacilit
   }
 
   // Validate role
-  const validRoles = ["admin", "user", "viewer", "loader"];
+  const validRoles = ["admin", "user", "viewer", "loader", "loading-tablet"];
   if (!validRoles.includes(role)) {
     return { success: false, error: "Invalid role" };
   }
@@ -317,7 +325,7 @@ async function updateUser(userId, updates, facilityId = DEFAULT_FACILITY_ID) {
 
   // Update allowed fields
   if (updates.role !== undefined) {
-    const validRoles = ["admin", "user", "viewer", "loader"];
+    const validRoles = ["admin", "user", "viewer", "loader", "loading-tablet"];
     if (!validRoles.includes(updates.role)) {
       return { success: false, error: "Invalid role" };
     }
@@ -329,10 +337,18 @@ async function updateUser(userId, updates, facilityId = DEFAULT_FACILITY_ID) {
   }
 
   if (updates.password) {
-    if (updates.password.length < 8) {
-      return { success: false, error: "Password must be at least 8 characters" };
+    if (user.role === "loading-tablet") {
+      // Loading-tablet uses 6-digit PIN
+      if (!/^\d{6}$/.test(updates.password)) {
+        return { success: false, error: "PIN must be 6 digits" };
+      }
+      user.passwordHash = "TABLET_" + updates.password;
+    } else {
+      if (updates.password.length < 8) {
+        return { success: false, error: "Password must be at least 8 characters" };
+      }
+      user.passwordHash = await hashPassword(updates.password);
     }
-    user.passwordHash = await hashPassword(updates.password);
   }
 
   if (updates.homeFacility !== undefined) {
@@ -365,7 +381,7 @@ async function updateGlobalUser(userId, updates) {
 
   // Update allowed fields
   if (updates.role !== undefined) {
-    const validRoles = ["admin", "user", "viewer", "loader"];
+    const validRoles = ["admin", "user", "viewer", "loader", "loading-tablet"];
     if (!validRoles.includes(updates.role)) {
       return { success: false, error: "Invalid role" };
     }
@@ -377,10 +393,18 @@ async function updateGlobalUser(userId, updates) {
   }
 
   if (updates.password) {
-    if (updates.password.length < 8) {
-      return { success: false, error: "Password must be at least 8 characters" };
+    if (user.role === "loading-tablet") {
+      // Loading-tablet uses 6-digit PIN
+      if (!/^\d{6}$/.test(updates.password)) {
+        return { success: false, error: "PIN must be 6 digits" };
+      }
+      user.passwordHash = "TABLET_" + updates.password;
+    } else {
+      if (updates.password.length < 8) {
+        return { success: false, error: "Password must be at least 8 characters" };
+      }
+      user.passwordHash = await hashPassword(updates.password);
     }
-    user.passwordHash = await hashPassword(updates.password);
   }
 
   user.updatedAt = new Date().toISOString();

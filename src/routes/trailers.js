@@ -291,6 +291,18 @@ router.put("/:id", requireAuth, requireRole("user"), (req, res) => {
     });
   }
 
+  if (updates.notes !== undefined && updates.notes !== trailer.notes) {
+    oldValues.notes = trailer.notes;
+    trailer.notes = updates.notes
+      ? sanitizeInput(updates.notes)
+      : null;
+    changes.push({
+      field: "notes",
+      from: oldValues.notes,
+      to: trailer.notes,
+    });
+  }
+
   // Update door status if trailer is docked
   if (trailer.doorId && updates.status) {
     const door = state.doors.find((d) => d.id === trailer.doorId);

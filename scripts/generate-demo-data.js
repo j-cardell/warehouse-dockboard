@@ -26,6 +26,23 @@ function getDataPaths(facilityId) {
 
 const CARRIERS = ['FedEx', 'UPS', 'Amazon', 'Walmart', 'Target', 'Home Depot', 'Costco', 'Wayfair'];
 const CUSTOMERS = ['Acme Corp', 'Global Industries', 'Tech Solutions', 'Retail Plus', 'Distribution Co'];
+const NOTES = [
+  "Make sure doors are shut, it's a rolldown",
+  "Driver has paperwork inside",
+  "Call dispatch before unloading",
+  "Fragile cargo - handle with care",
+  "Seal broken upon arrival - verify contents",
+  "Hazmat load - safety check required",
+  "Refrigerated unit - keep plugged in",
+  "Driver will return for pickup at 3pm",
+  "Overweight load - special handling",
+  "Stacked high - watch top boxes",
+  "Load shift in transit - inspect before unload",
+  "Rental trailer - return to yard after",
+  "Customer requesting call before arrival",
+  "COD shipment - collect payment",
+  "Lift gate required for unloading",
+];
 const DEFAULT_DOOR_COUNT = 57;
 const DEFAULT_YARD_SLOT_COUNT = 30;
 
@@ -92,6 +109,7 @@ function generateDoorTrailer(carrier, doorNumber, createdAt) {
     driverName: Math.random() > 0.3 ? 'Driver ' + Math.floor(Math.random() * 100) : null,
     driverPhone: Math.random() > 0.3 ? generatePhone() : null,
     contents: Math.random() > 0.5 ? 'General merchandise' : null,
+    notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
     appointmentTime: null, isLive: Math.random() > 0.5, location: 'door',
     doorId: 'door-' + doorNumber, doorNumber: doorNumber, createdAt, dwellResets: [], moveHistory: []
   };
@@ -102,6 +120,7 @@ function generateShippedTrailer(carrier, doorCount, createdAt, shippedAt) {
     id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
     status: 'shipped', customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
     loadNumber: Math.random() > 0.5 ? 'LD' + (Math.floor(Math.random() * 9000000) + 1000000) : null,
+    notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
     location: 'shipped', shippedAt,
     previousLocation: doorCount > 0 ? 'Door ' + (Math.floor(Math.random() * doorCount) + 1) : 'Yard', createdAt
   };
@@ -112,6 +131,7 @@ function generateQueuedTrailer(carrier, targetDoorNumber, targetDoorId) {
     id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
     status: Math.random() > 0.3 ? 'loaded' : 'empty',
     customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
+    notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
     location: 'queued', targetDoorId: targetDoorId || 'door-' + targetDoorNumber,
     targetDoorNumber: targetDoorNumber, queuedAt: randomDate(2), createdAt: randomDate(5), isLive: true
   };
@@ -124,6 +144,7 @@ function generateAppointmentTrailer(carrier) {
     customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
     driverName: Math.random() > 0.3 ? 'Driver ' + Math.floor(Math.random() * 100) : null,
     driverPhone: Math.random() > 0.3 ? generatePhone() : null,
+    notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
     appointmentTime: (Math.floor(Math.random() * 12) + 8) + ':' + Math.floor(Math.random() * 60).toString().padStart(2, '0'),
     location: 'appointment', createdAt: randomDate(2)
   };
@@ -135,6 +156,7 @@ function generateYardTrailer(carrier, slotNumber = null) {
     id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
     status: Math.random() > 0.3 ? 'loaded' : 'empty',
     customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
+    notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
     location: 'yard', createdAt, dwellResets: []
   };
   if (slotNumber !== null) {

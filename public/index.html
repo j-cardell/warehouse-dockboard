@@ -545,34 +545,19 @@
                             <input type="text" id="new-user-username" required placeholder="Enter username (min 3 chars)" minlength="3">
                         </div>
                         <div class="form-group" id="password-field-group">
-                            <label>Password *</label>
+                            <label id="password-label">Password</label>
                             <input type="password" id="new-user-password" required placeholder="Enter password (min 8 chars)" minlength="8">
                         </div>
-                        <script>
-                            // Toggle password requirement based on role
-                            document.getElementById('new-user-role')?.addEventListener('change', (e) => {
-                                const passwordField = document.getElementById('new-user-password');
-                                const passwordGroup = document.getElementById('password-field-group');
-                                if (e.target.value === 'loader') {
-                                    passwordField.removeAttribute('required');
-                                    passwordField.placeholder = 'Not needed for loaders';
-                                    passwordGroup.style.opacity = '0.5';
-                                } else {
-                                    passwordField.setAttribute('required', '');
-                                    passwordField.placeholder = 'Enter password (min 8 chars)';
-                                    passwordGroup.style.opacity = '1';
-                                }
-                            });
-                        </script>
                         <div class="form-group">
                             <label>Role *</label>
                             <select id="new-user-role" required>
                                 <option value="viewer">Viewer (Read-only)</option>
                                 <option value="user">User (Can manage trailers)</option>
                                 <option value="admin">Admin (Full access)</option>
-                                <option value="loader">Loader (Tablet interface only)</option>
+                                <option value="loader">Loader (Tablet - name selection)</option>
+                                <option value="loading-tablet">Loading Tablet (PIN-protected device)</option>
                             </select>
-                            <small style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">Loaders use tablets to mark trailers loaded/empty. No password needed.</small>
+                            <small id="role-help-text" style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">Loaders select their name on tablets. No password needed.</small>
                         </div>
                         <div class="modal-actions">
                             <button type="submit" class="btn btn-primary">Create User</button>

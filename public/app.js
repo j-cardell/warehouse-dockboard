@@ -8048,6 +8048,70 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderUsersList();
     console.log('[Users] Users list rendered');
 
+    // Setup role change handler for password/username fields
+    const roleSelect = document.getElementById('new-user-role');
+    const usernameField = document.getElementById('new-user-username');
+    const passwordField = document.getElementById('new-user-password');
+    const passwordGroup = document.getElementById('password-field-group');
+    const passwordLabel = document.getElementById('password-label');
+    const roleHelpText = document.getElementById('role-help-text');
+
+    function updateFormForRole() {
+      if (!roleSelect) return;
+      const role = roleSelect.value;
+
+      // Handle username field - no longer locked to 'loading-tablet', admins can choose any username
+      if (usernameField) {
+        usernameField.removeAttribute('readonly');
+        usernameField.style.opacity = '1';
+      }
+
+      // Handle password/PIN field
+      if (passwordField) {
+        if (role === 'loader') {
+          passwordField.removeAttribute('required');
+          passwordField.removeAttribute('minlength');
+          passwordField.placeholder = 'Not needed for loaders';
+          passwordField.type = 'text';
+          passwordField.removeAttribute('pattern');
+          passwordField.removeAttribute('maxlength');
+          passwordField.removeAttribute('inputmode');
+          passwordField.value = '';
+          if (passwordGroup) passwordGroup.style.opacity = '0.5';
+          if (passwordLabel) passwordLabel.textContent = 'Password';
+          if (roleHelpText) roleHelpText.textContent = 'Loaders select their name on tablets. No password needed.';
+        } else if (role === 'loading-tablet') {
+          passwordField.setAttribute('required', '');
+          passwordField.removeAttribute('minlength');
+          passwordField.placeholder = 'Enter 6-digit PIN';
+          passwordField.type = 'tel';
+          passwordField.setAttribute('inputmode', 'numeric');
+          passwordField.setAttribute('pattern', '\\d{6}');
+          passwordField.setAttribute('maxlength', '6');
+          if (passwordGroup) passwordGroup.style.opacity = '1';
+          if (passwordLabel) passwordLabel.textContent = 'PIN *';
+          if (roleHelpText) roleHelpText.textContent = 'Tablet login for a specific facility. Create multiple tablet users for different facilities.';
+        } else {
+          passwordField.setAttribute('required', '');
+          passwordField.setAttribute('minlength', '8');
+          passwordField.placeholder = 'Enter password (min 8 chars)';
+          passwordField.type = 'password';
+          passwordField.removeAttribute('pattern');
+          passwordField.removeAttribute('maxlength');
+          passwordField.removeAttribute('inputmode');
+          if (passwordGroup) passwordGroup.style.opacity = '1';
+          if (passwordLabel) passwordLabel.textContent = 'Password *';
+          if (roleHelpText) roleHelpText.textContent = '';
+        }
+      }
+    }
+
+    if (roleSelect) {
+      roleSelect.removeEventListener('change', updateFormForRole);
+      roleSelect.addEventListener('change', updateFormForRole);
+      updateFormForRole();
+    }
+
     // Setup form handler
     const form = document.getElementById('form-create-user');
     console.log('[Users] Form element:', form);
@@ -8059,9 +8123,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const password = document.getElementById('new-user-password')?.value;
         const role = document.getElementById('new-user-role')?.value;
 
-        // Password not required for loader role
+        // Password/PIN not required for loader role
         const payload = { username, role };
         if (role !== 'loader') {
+          // Include password/PIN for all other roles
           payload.password = password;
         }
 

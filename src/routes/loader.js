@@ -11,10 +11,12 @@ const router = express.Router();
 const { requireAuth, requireRole } = require("../middleware");
 const { loadState, addHistoryEntry } = require("../state");
 const { broadcastStateChange } = require("../sse");
+const { getAllUsers } = require("../users");
 
 /**
- * Middleware to require loader role or admin
+ * Middleware to require loader, loading-tablet role or admin
  * Admins can act as any loader by providing loaderName in request
+ * Loading-tablet users (the device) are allowed, actual operator name comes from selection
  */
 function requireLoader(req, res, next) {
   if (!req.user) {
@@ -24,8 +26,8 @@ function requireLoader(req, res, next) {
     });
   }
 
-  // Loaders can access
-  if (req.user.role === "loader") {
+  // Loaders and loading-tablet users can access
+  if (req.user.role === "loader" || req.user.role === "loading-tablet") {
     return next();
   }
 
@@ -69,6 +71,7 @@ router.post("/door", requireAuth, requireLoader, (req, res) => {
       number: trailer.number,
       carrier: trailer.carrier,
       status: trailer.status, // 'loaded' or 'empty'
+      notes: trailer.contents, // Include contents as notes for loader display
     } : null,
   });
 });
@@ -142,6 +145,21 @@ router.post("/status", requireAuth, requireLoader, (req, res) => {
     trailer: state.trailers[trailerIndex],
     message: `${loaderName} marked ${trailer.carrier} ${trailer.number} as ${status.toUpperCase()} at Door ${door.number}`,
   });
+});
+
+// GET /api/loader/loaders - Get list of loader names (for tablet name selection)
+router.get("/loaders", requireAuth, requireLoader, (req, res) => {
+  const facilityId = req.user.currentFacility || req.user.homeFacility;
+
+  // Get all users for this facility
+  const users = getAllUsers(facilityId);
+
+  // Filter to only loader role users
+  const loaders = users
+    .filter(u => u.role === 'loader' && u.active !== false)
+    .map(u => ({ id: u.id, username: u.username }));
+
+  res.json({ loaders });
 });
 
 module.exports = router;

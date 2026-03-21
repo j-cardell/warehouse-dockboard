@@ -65,8 +65,18 @@ router.post("/", requireAuth, requireAdmin, async (req, res) => {
     });
   }
 
-  // Password not required for loader role
-  if (role !== "loader" && !password) {
+  // Password/PIN validation based on role
+  if (role === "loader") {
+    // Loaders don't need passwords
+    // No validation needed
+  } else if (role === "loading-tablet") {
+    // Loading-tablet requires 6-digit PIN
+    if (!password || !/^\d{6}$/.test(password)) {
+      return res.status(400).json({
+        error: "Loading-tablet requires a 6-digit PIN",
+      });
+    }
+  } else if (!password) {
     return res.status(400).json({
       error: "Password required for non-loader users",
     });

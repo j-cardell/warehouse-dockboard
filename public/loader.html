@@ -2,9 +2,20 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Loader Interface - Warehouse Dock Board</title>
     <style>
+        /* Responsive scaling for tablets and phones */
+        :root {
+            /* Base sizes that scale with viewport */
+            --header-height: clamp(60px, 12vh, 80px);
+            --display-height: clamp(80px, 15vh, 120px);
+            --key-height: clamp(60px, 12vh, 90px);
+            --font-xl: clamp(2.5rem, 8vw, 4rem);
+            --font-lg: clamp(1.5rem, 5vw, 2.5rem);
+            --font-md: clamp(1rem, 4vw, 1.5rem);
+            --font-sm: clamp(0.875rem, 3vw, 1.25rem);
+        }
         * {
             margin: 0;
             padding: 0;
@@ -32,35 +43,97 @@
             background: var(--bg);
             color: var(--text);
             min-height: 100vh;
+            min-height: 100dvh; /* Dynamic viewport height for mobile */
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            padding-top: env(safe-area-inset-top, 0);
+            padding-bottom: env(safe-area-inset-bottom, 0);
         }
 
-        /* Header */
+        /* Header - responsive */
         .header {
             background: var(--bg-light);
-            padding: 1rem;
+            padding: clamp(0.5rem, 2vw, 1rem);
+            height: var(--header-height);
             display: flex;
             align-items: center;
             justify-content: space-between;
             border-bottom: 2px solid var(--bg-lighter);
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1000;
         }
 
         .header h1 {
-            font-size: 1.25rem;
+            font-size: var(--font-md);
             display: flex;
             align-items: center;
             gap: 0.5rem;
         }
 
         .header-icon {
-            font-size: 1.5rem;
+            font-size: var(--font-lg);
         }
 
         .loader-name {
             color: var(--accent-light);
             font-weight: 600;
+            cursor: pointer;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .loader-name:hover {
+            background: var(--bg-lighter);
+        }
+
+        .loader-name::after {
+            content: '▼';
+            font-size: 0.7rem;
+            margin-left: 0.5rem;
+            opacity: 0.7;
+        }
+
+        /* Logout menu */
+        .logout-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.5rem;
+            background: var(--bg-light);
+            border: 2px solid var(--bg-lighter);
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            min-width: 200px;
+            display: none;
+            z-index: 10000;
+        }
+
+        .logout-menu.active {
+            display: block;
+        }
+
+        .logout-item {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .logout-item:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        .logout-icon {
+            font-size: 1.2rem;
         }
 
         /* Screen container */
@@ -68,33 +141,61 @@
             flex: 1;
             display: none;
             flex-direction: column;
-            padding: 1.5rem;
-            gap: 1.5rem;
+            padding: clamp(0.75rem, 3vw, 1.5rem);
+            gap: clamp(0.5rem, 2vh, 1.5rem);
+            overflow-y: auto;
+            overflow-x: hidden;
+            min-height: 0;
+            max-height: calc(100dvh - var(--header-height) - env(safe-area-inset-bottom, 0px));
         }
 
         .screen.active {
             display: flex;
         }
 
+        /* Ensure screen content fits */
+        .screen > * {
+            flex-shrink: 0;
+        }
+
+        .screen > .keypad,
+        .screen > .name-grid {
+            flex-shrink: 1;
+            min-height: 0;
+        }
+
+        /* Specific screens that need to fit everything */
+        #screen-door,
+        #screen-verify,
+        #screen-status,
+        #screen-confirm {
+            justify-content: space-between;
+        }
+
         /* Name selection screen */
         .name-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 1rem;
+            gap: clamp(0.5rem, 2vw, 1rem);
             overflow-y: auto;
+            padding: 0.5rem;
         }
 
         .name-btn {
             background: var(--bg-lighter);
             border: 2px solid transparent;
             color: var(--text);
-            padding: 1.5rem 1rem;
-            font-size: 1.25rem;
+            padding: clamp(1rem, 4vh, 1.5rem) clamp(0.5rem, 2vw, 1rem);
+            font-size: var(--font-md);
             border-radius: 0.75rem;
             cursor: pointer;
             transition: all 0.2s;
             text-align: center;
             font-weight: 500;
+            min-height: var(--key-height);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .name-btn:hover, .name-btn:active {
@@ -108,42 +209,90 @@
             background: var(--bg-light);
             border: 3px solid var(--bg-lighter);
             border-radius: 1rem;
-            padding: 2rem;
+            padding: clamp(1rem, 3vh, 1.5rem);
             text-align: center;
-            min-height: 100px;
+            height: var(--display-height);
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden;
+            margin-bottom: clamp(0.5rem, 2vh, 1rem);
+        }
+
+        #door-display-content {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 60%;
         }
 
         .door-number {
-            font-size: 4rem;
+            font-size: var(--font-xl);
             font-weight: bold;
             color: var(--accent-light);
             letter-spacing: 0.1em;
+            line-height: 1;
         }
 
         .door-placeholder {
-            font-size: 1.5rem;
+            font-size: var(--font-md);
             color: var(--text-muted);
+            line-height: 1;
+        }
+
+        /* PIN display - fixed width to prevent shifting */
+        .pin-display {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: clamp(0.5rem, 3vw, 1rem);
+            font-size: var(--font-lg);
+            min-width: min(280px, 80vw);
+        }
+
+        .pin-dot {
+            width: clamp(1rem, 4vw, 1.5rem);
+            height: clamp(1rem, 4vw, 1.5rem);
+            border-radius: 50%;
+            background: var(--text-muted);
+            opacity: 0.3;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .pin-dot.filled {
+            background: var(--accent-light);
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .pin-dot.filled {
+            background: var(--accent-light);
+            opacity: 1;
+            transform: scale(1.1);
         }
 
         .keypad {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
+            gap: clamp(0.5rem, 2vw, 1rem);
         }
 
         .key {
             background: var(--bg-lighter);
             border: 2px solid var(--bg-lighter);
             color: var(--text);
-            padding: 1.5rem;
-            font-size: 2rem;
+            padding: clamp(1rem, 3vh, 1.5rem) clamp(0.5rem, 2vw, 1rem);
+            font-size: var(--font-lg);
             border-radius: 0.75rem;
             cursor: pointer;
             transition: all 0.1s;
             font-weight: 500;
+            min-height: var(--key-height);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .key:hover, .key:active {
@@ -163,7 +312,39 @@
         .key.submit {
             background: var(--success);
             grid-column: span 2;
-            font-size: 1.5rem;
+            font-size: var(--font-md);
+        }
+
+        .key.submit.pin-submit,
+        .key.submit.door-submit {
+            grid-column: span 3;
+        }
+
+        /* PIN screen specific - ensure it fits */
+        #screen-pin {
+            justify-content: flex-start;
+            padding-top: clamp(1rem, 5vh, 2rem);
+        }
+
+        #screen-pin h2 {
+            margin-bottom: clamp(0.5rem, 3vh, 1rem);
+            flex-shrink: 0;
+        }
+
+        #screen-pin .door-display {
+            flex-shrink: 0;
+            margin-bottom: clamp(0.5rem, 3vh, 1rem);
+        }
+
+        #screen-pin .keypad {
+            flex: 1;
+            min-height: 0;
+            max-height: calc(100dvh - var(--header-height) - 200px - env(safe-area-inset-bottom, 0px));
+        }
+
+        #screen-pin .key {
+            min-height: 0;
+            padding: clamp(0.5rem, 2vh, 1rem);
         }
 
         .key.submit:hover, .key.submit:active {
@@ -175,48 +356,56 @@
             background: var(--bg-light);
             border: 3px solid var(--bg-lighter);
             border-radius: 1rem;
-            padding: 2rem;
+            padding: clamp(1rem, 4vh, 2rem);
             text-align: center;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
         }
 
         .verify-door {
-            font-size: 1.5rem;
+            font-size: var(--font-md);
             color: var(--text-muted);
-            margin-bottom: 1rem;
+            margin-bottom: clamp(0.5rem, 2vh, 1rem);
         }
 
         .verify-trailer {
-            font-size: 2.5rem;
+            font-size: var(--font-xl);
             font-weight: bold;
             margin-bottom: 0.5rem;
         }
 
         .verify-carrier {
-            font-size: 1.75rem;
+            font-size: var(--font-lg);
             color: var(--accent-light);
-            margin-bottom: 2rem;
+            margin-bottom: clamp(1rem, 4vh, 2rem);
         }
 
         .verify-question {
-            font-size: 1.25rem;
+            font-size: var(--font-md);
             color: var(--text-muted);
-            margin-bottom: 1.5rem;
+            margin-bottom: clamp(1rem, 3vh, 1.5rem);
         }
 
         .verify-buttons {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 1rem;
+            gap: clamp(0.5rem, 2vw, 1rem);
+            width: 100%;
         }
 
         .btn {
-            padding: 1.5rem 2rem;
-            font-size: 1.5rem;
+            padding: clamp(1rem, 3vh, 1.5rem) clamp(1rem, 3vw, 2rem);
+            font-size: var(--font-md);
             border: none;
             border-radius: 0.75rem;
             cursor: pointer;
             font-weight: 600;
             transition: all 0.2s;
+            min-height: var(--key-height);
         }
 
         .btn-yes {
@@ -247,7 +436,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            padding: clamp(1rem, 4vh, 2rem);
             text-align: center;
         }
 
@@ -256,40 +445,41 @@
         }
 
         .error-icon {
-            font-size: 5rem;
-            margin-bottom: 1rem;
+            font-size: var(--font-xl);
+            margin-bottom: clamp(0.5rem, 2vh, 1rem);
         }
 
         .error-text {
-            font-size: 2.5rem;
+            font-size: var(--font-xl);
             font-weight: bold;
-            margin-bottom: 1rem;
+            margin-bottom: clamp(0.5rem, 2vh, 1rem);
         }
 
         .error-subtext {
-            font-size: 1.5rem;
+            font-size: var(--font-md);
             opacity: 0.9;
         }
 
         .error-tap {
-            margin-top: 3rem;
-            font-size: 1.25rem;
+            margin-top: clamp(1.5rem, 5vh, 3rem);
+            font-size: var(--font-sm);
             opacity: 0.7;
         }
 
         /* Status buttons screen */
         .status-header {
             text-align: center;
-            margin-bottom: 1rem;
+            margin-bottom: clamp(0.5rem, 2vh, 1rem);
+            flex-shrink: 0;
         }
 
         .status-door {
-            font-size: 1.5rem;
+            font-size: var(--font-md);
             color: var(--text-muted);
         }
 
         .status-trailer {
-            font-size: 2rem;
+            font-size: var(--font-lg);
             font-weight: bold;
             margin-top: 0.5rem;
         }
@@ -298,7 +488,9 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
+            gap: clamp(0.5rem, 2vh, 1rem);
+            min-height: 0;
+            max-height: calc(100vh - var(--header-height) - 120px);
         }
 
         .status-btn {
@@ -312,6 +504,9 @@
             cursor: pointer;
             transition: all 0.2s;
             font-weight: bold;
+            min-height: 80px;
+            max-height: 45%;
+            padding: clamp(0.5rem, 2vh, 1rem);
         }
 
         .status-btn:hover, .status-btn:active {
@@ -339,12 +534,64 @@
         }
 
         .status-label {
-            font-size: 3rem;
+            font-size: clamp(1.5rem, 8vw, 3rem);
             margin-bottom: 0.5rem;
         }
 
         .status-icon {
-            font-size: 4rem;
+            font-size: clamp(2rem, 10vw, 4rem);
+        }
+
+        /* Notes screen */
+        .notes-card {
+            background: var(--bg-light);
+            border: 3px solid var(--warning);
+            border-radius: 1rem;
+            padding: clamp(1rem, 4vh, 2rem);
+            text-align: center;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 0;
+            max-width: 100%;
+        }
+
+        .notes-icon {
+            font-size: clamp(3rem, 15vw, 5rem);
+            margin-bottom: clamp(0.5rem, 2vh, 1rem);
+        }
+
+        .notes-title {
+            font-size: clamp(1.5rem, 8vw, 2rem);
+            font-weight: bold;
+            color: var(--warning);
+            margin-bottom: clamp(1rem, 3vh, 1.5rem);
+        }
+
+        .notes-content {
+            font-size: var(--font-md);
+            color: var(--text);
+            background: var(--bg);
+            padding: clamp(1rem, 3vw, 1.5rem);
+            border-radius: 0.75rem;
+            margin-bottom: clamp(1rem, 3vh, 1.5rem);
+            max-width: 100%;
+            word-wrap: break-word;
+            overflow-y: auto;
+            max-height: 50vh;
+            text-align: left;
+            line-height: 1.5;
+        }
+
+        .notes-tap {
+            margin-top: auto;
+            font-size: var(--font-sm);
+            color: var(--text-muted);
+            padding: clamp(0.5rem, 2vh, 1rem);
+            border-top: 2px solid var(--bg-lighter);
+            width: 100%;
         }
 
         /* Confirmation screen */
@@ -352,38 +599,40 @@
             background: var(--bg-light);
             border: 3px solid var(--success);
             border-radius: 1rem;
-            padding: 2rem;
+            padding: clamp(1rem, 4vh, 2rem);
             text-align: center;
             flex: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            min-height: 0;
         }
 
         .confirm-icon {
-            font-size: 5rem;
-            margin-bottom: 1rem;
+            font-size: clamp(3rem, 15vw, 5rem);
+            margin-bottom: clamp(0.5rem, 2vh, 1rem);
         }
 
         .confirm-text {
-            font-size: 2rem;
+            font-size: clamp(1.5rem, 8vw, 2rem);
             font-weight: bold;
             color: var(--success);
-            margin-bottom: 1rem;
+            margin-bottom: clamp(0.5rem, 2vh, 1rem);
         }
 
         .confirm-details {
-            font-size: 1.25rem;
+            font-size: var(--font-md);
             color: var(--text-muted);
-            margin-bottom: 2rem;
+            margin-bottom: clamp(1rem, 4vh, 2rem);
+            word-break: break-word;
         }
 
         .confirm-return {
             margin-top: auto;
-            font-size: 1.25rem;
+            font-size: var(--font-sm);
             color: var(--text-muted);
-            padding: 1rem;
+            padding: clamp(0.5rem, 2vh, 1rem);
             border-top: 2px solid var(--bg-lighter);
             width: 100%;
         }
@@ -423,17 +672,160 @@
         .hidden {
             display: none !important;
         }
+
+        /* Landscape mode optimizations for phones */
+        @media (orientation: landscape) and (max-height: 500px) {
+            :root {
+                --header-height: 45px;
+                --display-height: 50px;
+                --key-height: 40px;
+                --font-xl: 1.75rem;
+                --font-lg: 1.1rem;
+                --font-md: 0.9rem;
+            }
+
+            .screen {
+                padding: 0.5rem;
+                gap: 0.5rem;
+            }
+
+            .keypad {
+                gap: 0.5rem;
+            }
+
+            .key {
+                padding: 0.5rem;
+                min-height: 40px;
+            }
+
+            .door-display {
+                padding: 0.5rem;
+                margin-bottom: 0.5rem;
+            }
+
+            /* PIN screen in landscape */
+            #screen-pin .keypad {
+                max-height: calc(100dvh - var(--header-height) - 100px);
+            }
+
+            #screen-pin .key {
+                min-height: 35px;
+                padding: 0.25rem;
+            }
+            .status-buttons {
+                flex-direction: row;
+                max-height: calc(100dvh - var(--header-height) - 80px);
+            }
+
+            .status-btn {
+                min-height: 60px;
+                max-height: 100%;
+            }
+
+            .status-label {
+                font-size: 1.5rem;
+            }
+
+            .status-icon {
+                font-size: 2rem;
+            }
+
+            /* Verification card more compact */
+            .verify-card {
+                padding: 1rem;
+            }
+
+            .verify-trailer {
+                font-size: 1.5rem;
+            }
+
+            .verify-carrier {
+                font-size: 1rem;
+                margin-bottom: 1rem;
+            }
+
+            /* Confirmation more compact */
+            .confirm-icon {
+                font-size: 2.5rem;
+            }
+
+            .confirm-text {
+                font-size: 1.25rem;
+            }
+        }
+
+        /* Small screens */
+        @media (max-width: 380px) {
+            :root {
+                --font-xl: 2rem;
+                --font-lg: 1.25rem;
+            }
+        }
+
+        /* Large tablets */
+        @media (min-width: 768px) {
+            :root {
+                --font-xl: 5rem;
+                --font-lg: 2.5rem;
+            }
+        }
     </style>
 </head>
 <body>
     <!-- Header -->
     <header class="header">
-        <h1><span class="header-icon">📦</span> Loader</h1>
-        <div id="current-loader" class="loader-name"></div>
+        <h1 id="header-title" style="cursor: pointer;" title="Click to refresh"><span class="header-icon">📦</span> Loader</h1>
+        <div id="current-loader" class="loader-name">
+            <div id="logout-menu" class="logout-menu">
+                <div class="logout-item">
+                    <span class="logout-icon">🚪</span>
+                    <span>Log Out</span>
+                </div>
+            </div>
+        </div>
     </header>
 
+    <!-- Screen 0: Tablet Login (shown when token is missing/invalid) -->
+    <div id="screen-pin" class="screen">
+        <h2 style="text-align: center; color: var(--text-muted);">Tablet Login</h2>
+        <div style="padding: 1rem; max-width: 400px; margin: 0 auto;">
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; color: var(--text-muted); margin-bottom: 0.5rem; font-size: var(--font-sm);">Username</label>
+                <input type="text" id="tablet-username" placeholder="Enter username" style="width: 100%; padding: 1rem; font-size: var(--font-md); background: var(--bg-light); border: 2px solid var(--bg-lighter); border-radius: 0.5rem; color: var(--text);" autocomplete="off">
+            </div>
+            <label style="display: block; color: var(--text-muted); margin-bottom: 0.5rem; font-size: var(--font-sm);">PIN</label>
+            <div class="door-display" style="margin-bottom: 1rem;">
+                <div id="pin-display-content" class="pin-display">
+                    <div class="pin-dot" data-index="0"></div>
+                    <div class="pin-dot" data-index="1"></div>
+                    <div class="pin-dot" data-index="2"></div>
+                    <div class="pin-dot" data-index="3"></div>
+                    <div class="pin-dot" data-index="4"></div>
+                    <div class="pin-dot" data-index="5"></div>
+                </div>
+            </div>
+        </div>
+        <div class="keypad">
+            <button class="key" data-pin="1">1</button>
+            <button class="key" data-pin="2">2</button>
+            <button class="key" data-pin="3">3</button>
+            <button class="key" data-pin="4">4</button>
+            <button class="key" data-pin="5">5</button>
+            <button class="key" data-pin="6">6</button>
+            <button class="key" data-pin="7">7</button>
+            <button class="key" data-pin="8">8</button>
+            <button class="key" data-pin="9">9</button>
+            <button class="key backspace" data-pin="backspace">⌫</button>
+            <button class="key" data-pin="0">0</button>
+            <button class="key submit pin-submit" data-pin="submit">UNLOCK</button>
+        </div>
+        <div id="pin-error" style="text-align: center; color: var(--danger); margin-top: 1rem; display: none;">
+            Invalid credentials
+        </div>
+    </div>
+
     <!-- Screen 1: Name Selection -->
-    <div id="screen-names" class="screen active">
+    <div id="screen-names" class="screen">
         <h2 style="text-align: center; color: var(--text-muted);">Select your name</h2>
         <div id="name-grid" class="name-grid">
             <!-- Names populated by JS -->
@@ -459,8 +851,7 @@
             <button class="key" data-key="9">9</button>
             <button class="key backspace" data-key="backspace">⌫</button>
             <button class="key" data-key="0">0</button>
-            <button class="key" style="visibility: hidden;"></button>
-            <button class="key submit" data-key="submit">SUBMIT</button>
+            <button class="key submit door-submit" data-key="submit">SUBMIT</button>
         </div>
     </div>
 
@@ -478,7 +869,17 @@
         </div>
     </div>
 
-    <!-- Screen 4: Status Buttons -->
+    <!-- Screen 4: Notes Display (if trailer has notes) -->
+    <div id="screen-notes" class="screen">
+        <div class="notes-card">
+            <div class="notes-icon">📝</div>
+            <div class="notes-title">Trailer Notes</div>
+            <div class="notes-content" id="trailer-notes-text"></div>
+            <div class="notes-tap">Tap anywhere to continue</div>
+        </div>
+    </div>
+
+    <!-- Screen 5: Status Buttons -->
     <div id="screen-status" class="screen">
         <div class="status-header">
             <div class="status-door">🚪 DOOR <span id="status-door-num"></span></div>
@@ -514,6 +915,19 @@
         <div class="error-tap">Tap anywhere to start over</div>
     </div>
 
+    <!-- Logout Confirmation Modal -->
+    <div id="logout-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.95); z-index: 100000; display: none; align-items: center; justify-content: center; flex-direction: column; padding: 1rem; box-sizing: border-box;">
+        <div class="verify-card" style="max-width: 400px; width: 100%; max-height: 80vh; flex: 0 0 auto; padding: 2rem;">
+            <div class="confirm-icon" style="font-size: clamp(3rem, 10vw, 4rem); margin-bottom: 1rem;">🚪</div>
+            <div style="font-size: var(--font-md); font-weight: 600; margin-bottom: 0.5rem;">Log Out?</div>
+            <div style="font-size: var(--font-sm); color: var(--text-muted); margin-bottom: 1.5rem;">This will clear your session and return to login.</div>
+            <div class="verify-buttons" style="gap: 1rem;">
+                <button class="btn btn-yes" id="btn-confirm-logout" style="background: var(--danger); border-color: var(--danger);">🚪 Log Out</button>
+                <button class="btn btn-no" id="btn-cancel-logout">❌ Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Loading Overlay -->
     <div id="loading" class="loading">
         <div class="spinner"></div>
@@ -521,16 +935,20 @@
 
     <script>
         // State
-        let currentLoader = null;
+        let currentLoader = null;        // The logged-in user (loading-tablet)
+        let selectedOperatorName = null; // The selected loader for history tracking
         let currentDoorNumber = '';
         let currentTrailer = null;
         let token = localStorage.getItem('dockboard_token');
+        let currentPin = '';
 
         // Screens
         const screens = {
+            pin: document.getElementById('screen-pin'),
             names: document.getElementById('screen-names'),
             door: document.getElementById('screen-door'),
             verify: document.getElementById('screen-verify'),
+            notes: document.getElementById('screen-notes'),
             status: document.getElementById('screen-status'),
             confirm: document.getElementById('screen-confirm'),
             error: document.getElementById('screen-error'),
@@ -540,12 +958,22 @@
         function showScreen(name) {
             Object.values(screens).forEach(s => s.classList.remove('active'));
             screens[name].classList.add('active');
+
+            // Hide loader name on PIN screen, show on others
+            const loaderDiv = document.getElementById('current-loader');
+            if (loaderDiv) {
+                if (name === 'pin') {
+                    loaderDiv.style.visibility = 'hidden';
+                } else {
+                    loaderDiv.style.visibility = 'visible';
+                }
+            }
         }
 
         // Check auth and role
         async function checkAuth() {
             if (!token) {
-                window.location.href = '/';
+                showScreen('pin');
                 return false;
             }
 
@@ -555,31 +983,124 @@
                 });
                 const data = await res.json();
 
-                if (!data.authenticated || (data.user.role !== 'loader' && data.user.role !== 'admin')) {
+                if (!data.authenticated) {
+                    // Token invalid/expired - show PIN screen
+                    token = null;
+                    localStorage.removeItem('dockboard_token');
+                    showScreen('pin');
+                    return false;
+                }
+
+                // Check if user is loading-tablet, loader, or admin
+                if (!['loading-tablet', 'loader', 'admin'].includes(data.user.role)) {
+                    // Wrong role - redirect to main app
                     window.location.href = '/';
                     return false;
                 }
 
+                // Always show the actual logged-in user (loading-tablet) in header
                 currentLoader = data.user.username;
-                document.getElementById('current-loader').textContent = currentLoader;
+                updateLoaderDisplay();
+
+                // If loading-tablet role, show name selection for history tracking
+                if (data.user.role === 'loading-tablet') {
+                    showScreen('names');
+                } else {
+                    // Regular loader - go straight to door entry
+                    showScreen('door');
+                }
+
                 return true;
             } catch (err) {
                 console.error('Auth check failed:', err);
-                window.location.href = '/';
+                showScreen('pin');
                 return false;
             }
+        }
+
+        // Handle PIN login
+        async function loginWithPin(pin) {
+            const username = document.getElementById('tablet-username')?.value?.trim();
+
+            if (!username) {
+                document.getElementById('pin-error').textContent = 'Enter username';
+                document.getElementById('pin-error').style.display = 'block';
+                return;
+            }
+
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('pin-error').style.display = 'none';
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: username, password: pin })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Invalid credentials');
+                }
+
+                // Check if user has a facility assigned (loading-tablet or regular user)
+                if (!data.user.homeFacility && !data.selectFacilityRequired) {
+                    throw new Error('User not assigned to a facility');
+                }
+
+                // Store token
+                token = data.token;
+                localStorage.setItem('dockboard_token', token);
+
+                // Set current loader username and update display
+                currentLoader = data.user.username;
+                updateLoaderDisplay();
+
+                // Clear inputs
+                document.getElementById('tablet-username').value = '';
+                currentPin = '';
+                updatePinDisplay();
+
+                // Show name selection screen
+                await loadLoaderNames();
+                showScreen('names');
+
+            } catch (err) {
+                console.error('Login failed:', err);
+                document.getElementById('pin-error').textContent = err.message || 'Invalid credentials';
+                document.getElementById('pin-error').style.display = 'block';
+                currentPin = '';
+                updatePinDisplay();
+            } finally {
+                document.getElementById('loading').classList.remove('active');
+            }
+        }
+
+        // Update PIN display
+        function updatePinDisplay() {
+            const dots = document.querySelectorAll('.pin-dot');
+            dots.forEach((dot, index) => {
+                if (index < currentPin.length) {
+                    dot.classList.add('filled');
+                } else {
+                    dot.classList.remove('filled');
+                }
+            });
         }
 
         // Load loader names (for name selection - admin users with loader role)
         async function loadLoaderNames() {
             try {
-                const res = await fetch('/api/users', {
+                const res = await fetch('/api/loader/loaders', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
+                console.log('[Loader] Loaders response:', data);
 
-                // Filter to only loader role users
-                const loaders = data.users.filter(u => u.role === 'loader' && u.active !== false);
+                // Loaders are already filtered by the API
+                const loaders = data.loaders || [];
+                console.log('[Loader] Loaders:', loaders);
                 loaders.sort((a, b) => a.username.localeCompare(b.username));
 
                 const grid = document.getElementById('name-grid');
@@ -601,13 +1122,103 @@
             }
         }
 
-        // Select loader
-        function selectLoader(name) {
-            currentLoader = name;
-            document.getElementById('current-loader').textContent = currentLoader;
+        // Select loader (for history tracking - actual user stays loading-tablet)
+        function selectLoader(loaderName) {
+            // Store the selected loader name for API calls
+            selectedOperatorName = loaderName;
             currentDoorNumber = '';
             updateDoorDisplay();
             showScreen('door');
+        }
+
+        // Update loader display with logout menu
+        function updateLoaderDisplay() {
+            const loaderDiv = document.getElementById('current-loader');
+            if (currentLoader) {
+                // Keep the logout menu, just update the text
+                const textSpan = loaderDiv.querySelector('.loader-text') || document.createElement('span');
+                textSpan.className = 'loader-text';
+                textSpan.textContent = currentLoader;
+                if (!loaderDiv.querySelector('.loader-text')) {
+                    loaderDiv.insertBefore(textSpan, loaderDiv.firstChild);
+                }
+            }
+        }
+
+        // Toggle logout menu - support both click and touch
+        const currentLoaderBtn = document.getElementById('current-loader');
+        function toggleLogoutMenu(e) {
+            if (e) {
+                e.stopPropagation();
+            }
+            const menu = document.getElementById('logout-menu');
+            menu?.classList.toggle('active');
+        }
+
+        currentLoaderBtn?.addEventListener('click', toggleLogoutMenu);
+        currentLoaderBtn?.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleLogoutMenu(e);
+        }, { passive: false });
+
+        // Close menu when clicking elsewhere (but not when clicking the toggle button itself)
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('logout-menu');
+            const loaderBtn = document.getElementById('current-loader');
+            if (menu?.classList.contains('active') && !loaderBtn?.contains(e.target)) {
+                menu.classList.remove('active');
+            }
+        });
+
+        // Show logout confirmation modal
+        function confirmLogout() {
+            const logoutModal = document.getElementById('logout-modal');
+            if (logoutModal) {
+                logoutModal.style.display = 'flex';
+            }
+            // Close the dropdown menu
+            const menu = document.getElementById('logout-menu');
+            if (menu) menu.classList.remove('active');
+        }
+
+        // Perform actual logout
+        function doLogout() {
+            // Clear token and state
+            token = null;
+            localStorage.removeItem('dockboard_token');
+            currentLoader = null;
+            selectedOperatorName = null;
+            currentPin = '';
+            updatePinDisplay();
+            // Clear the username input
+            const usernameInput = document.getElementById('tablet-username');
+            if (usernameInput) usernameInput.value = '';
+            // Clear the loader name text
+            const loaderDiv = document.getElementById('current-loader');
+            const textSpan = loaderDiv?.querySelector('.loader-text');
+            if (textSpan) textSpan.remove();
+            // Clear any error message
+            const pinError = document.getElementById('pin-error');
+            if (pinError) {
+                pinError.textContent = 'Invalid credentials';
+                pinError.style.display = 'none';
+            }
+            // Hide logout modal
+            const logoutModal = document.getElementById('logout-modal');
+            if (logoutModal) {
+                logoutModal.style.display = 'none';
+            }
+            // Show PIN screen (hides the header via showScreen)
+            showScreen('pin');
+        }
+
+        // Cancel logout
+        function cancelLogout() {
+            const logoutModal = document.getElementById('logout-modal');
+            if (logoutModal) {
+                logoutModal.style.display = 'none';
+            }
         }
 
         // Update door display
@@ -620,8 +1231,28 @@
             }
         }
 
-        // Keypad handling
-        document.querySelectorAll('.key').forEach(key => {
+        // PIN keypad handling
+        document.querySelectorAll('[data-pin]').forEach(key => {
+            key.addEventListener('click', () => {
+                const k = key.dataset.pin;
+
+                if (k === 'backspace') {
+                    currentPin = currentPin.slice(0, -1);
+                } else if (k === 'submit') {
+                    if (currentPin.length === 6) {
+                        loginWithPin(currentPin);
+                    }
+                    return;
+                } else if (currentPin.length < 6) {
+                    currentPin += k;
+                }
+
+                updatePinDisplay();
+            });
+        });
+
+        // Door keypad handling
+        document.querySelectorAll('[data-key]').forEach(key => {
             key.addEventListener('click', () => {
                 const k = key.dataset.key;
 
@@ -681,13 +1312,38 @@
             }
         }
 
+        // Helper to decode HTML entities
+        function decodeHtmlEntities(text) {
+            if (!text) return '';
+            const textarea = document.createElement('textarea');
+            textarea.innerHTML = text;
+            return textarea.value;
+        }
+
         // Verification buttons
         document.getElementById('btn-yes').addEventListener('click', () => {
-            // Show status selection
+            // Check if trailer has notes
+            if (currentTrailer?.notes && currentTrailer.notes.trim()) {
+                // Show notes screen first
+                document.getElementById('trailer-notes-text').textContent = decodeHtmlEntities(currentTrailer.notes);
+                showScreen('notes');
+            } else {
+                // No notes, go straight to status selection
+                showStatusScreen();
+            }
+        });
+
+        // Notes screen tap to dismiss
+        document.getElementById('screen-notes').addEventListener('click', () => {
+            showStatusScreen();
+        });
+
+        // Helper to show status screen
+        function showStatusScreen() {
             document.getElementById('status-door-num').textContent = currentDoorNumber;
             document.getElementById('status-trailer-info').textContent = `${currentTrailer.carrier} ${currentTrailer.number}`;
             showScreen('status');
-        });
+        }
 
         document.getElementById('btn-no').addEventListener('click', () => {
             showScreen('error');
@@ -711,7 +1367,7 @@
                     body: JSON.stringify({
                         doorNumber: parseInt(currentDoorNumber),
                         status: status,
-                        loaderName: currentLoader
+                        loaderName: selectedOperatorName || currentLoader
                     })
                 });
 
@@ -721,9 +1377,10 @@
                     throw new Error(data.error || 'Failed to update status');
                 }
 
-                // Show confirmation
+                // Show confirmation with operator name
+                const operatorName = selectedOperatorName || currentLoader;
                 document.getElementById('confirm-details').textContent =
-                    `${currentTrailer.carrier} ${currentTrailer.number} marked ${status.toUpperCase()} at Door ${currentDoorNumber}`;
+                    `${operatorName} marked ${currentTrailer.carrier} ${currentTrailer.number} as ${status.toUpperCase()} at Door ${currentDoorNumber}`;
                 showScreen('confirm');
 
                 // Auto-return after 3 seconds
@@ -739,10 +1396,11 @@
             }
         }
 
-        // Reset to name selection
+        // Reset to name selection (operator must re-select their name)
         function resetToNameSelection() {
             currentDoorNumber = '';
             currentTrailer = null;
+            selectedOperatorName = null; // Clear operator so they must select again
             updateDoorDisplay();
             showScreen('names');
         }
@@ -752,6 +1410,47 @@
 
         // Confirmation screen tap to reset
         document.getElementById('screen-confirm').addEventListener('click', resetToNameSelection);
+
+        // Enter key on username field triggers login
+        document.getElementById('tablet-username')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                // Focus the PIN entry or trigger login if PIN is complete
+                if (currentPin.length === 6) {
+                    loginWithPin(currentPin);
+                }
+            }
+        });
+
+        // iOS Safari fix: ensure logout item is clickable via touch events
+        const logoutItem = document.querySelector('.logout-item');
+        if (logoutItem) {
+            logoutItem.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                confirmLogout();
+            });
+            // Also ensure click works
+            logoutItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                confirmLogout();
+            });
+        }
+
+        // Logout modal button handlers
+        document.getElementById('btn-confirm-logout')?.addEventListener('click', doLogout);
+        document.getElementById('btn-cancel-logout')?.addEventListener('click', cancelLogout);
+        document.getElementById('logout-modal')?.addEventListener('click', (e) => {
+            // Close if clicking outside the card
+            if (e.target.id === 'logout-modal') {
+                cancelLogout();
+            }
+        });
+
+        // Header click to refresh page
+        document.getElementById('header-title')?.addEventListener('click', () => {
+            window.location.reload();
+        });
 
         // Initialize
         async function init() {

@@ -215,8 +215,8 @@ app.use((req, res, next) => {
       const jwt = require("jsonwebtoken");
       const { JWT_SECRET } = require("./config");
       const decoded = jwt.verify(token, JWT_SECRET);
-      if (decoded.role === "loader") {
-        // Loader trying to access main app - redirect to loader interface
+      if (decoded.role === "loader" || decoded.role === "loading-tablet") {
+        // Loader or loading-tablet trying to access main app - redirect to loader interface
         return res.redirect("/loader");
       }
     } catch (err) {
