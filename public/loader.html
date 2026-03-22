@@ -1075,11 +1075,10 @@
 <body>
     <!-- Header -->
     <header class="header">
-        <h1 id="header-title" style="cursor: pointer;" title="Click to refresh"><span class="header-icon">📦</span> Loader</h1>
+        <h1 id="header-title" style="cursor: pointer;" title="Click to refresh">Loader</h1>
         <div id="current-loader" class="loader-name">
             <div id="logout-menu" class="logout-menu">
                 <div class="logout-item">
-                    <span class="logout-icon">🚪</span>
                     <span>Log Out</span>
                 </div>
             </div>
@@ -1157,7 +1156,7 @@
     <!-- Screen 3: Verification -->
     <div id="screen-verify" class="screen">
         <div class="verify-card">
-            <div class="verify-door">🚪 DOOR <span id="verify-door-num"></span></div>
+            <div class="verify-door">DOOR <span id="verify-door-num"></span></div>
             <div class="verify-trailer" id="verify-trailer-num"></div>
             <div class="verify-carrier" id="verify-carrier"></div>
             <div class="verify-question">Is this correct?</div>
@@ -1180,7 +1179,7 @@
     <!-- Screen 5: Status Buttons -->
     <div id="screen-status" class="screen">
         <div class="status-header">
-            <div class="status-door">🚪 DOOR <span id="status-door-num"></span></div>
+            <div class="status-door">DOOR <span id="status-door-num"></span></div>
             <div class="status-trailer" id="status-trailer-info"></div>
             <div id="trailer-direction-badge" style="font-size: 0.75rem; margin-top: 0.5rem;"></div>
         </div>
@@ -1210,11 +1209,11 @@
     <!-- Logout Confirmation Modal -->
     <div id="logout-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.95); z-index: 100000; display: none; align-items: center; justify-content: center; flex-direction: column; padding: 1rem; box-sizing: border-box;">
         <div class="verify-card" style="max-width: 400px; width: 100%; max-height: 80vh; flex: 0 0 auto; padding: 2rem;">
-            <div class="confirm-icon" style="font-size: clamp(3rem, 10vw, 4rem); margin-bottom: 1rem;">🚪</div>
+            <div class="confirm-icon" style="font-size: clamp(3rem, 10vw, 4rem); margin-bottom: 1rem;"></div>
             <div style="font-size: var(--font-md); font-weight: 600; margin-bottom: 0.5rem;">Log Out?</div>
             <div style="font-size: var(--font-sm); color: var(--text-muted); margin-bottom: 1.5rem;">This will clear your session and return to login.</div>
             <div class="verify-buttons" style="gap: 1rem;">
-                <button class="btn btn-yes" id="btn-confirm-logout" style="background: var(--danger); border-color: var(--danger);">🚪 Log Out</button>
+                <button class="btn btn-yes" id="btn-confirm-logout" style="background: var(--danger); border-color: var(--danger);">Log Out</button>
                 <button class="btn btn-no" id="btn-cancel-logout">❌ Cancel</button>
             </div>
         </div>
@@ -1690,15 +1689,12 @@
                 buttonsContainer.innerHTML = `
                     <button class="status-btn status-btn-loaded" id="btn-loaded">
                         <span class="status-label">LOADED</span>
-                        <span class="status-icon">📦</span>
                     </button>
                     <button class="status-btn status-btn-empty" id="btn-empty">
                         <span class="status-label">EMPTY</span>
-                        <span class="status-icon">📭</span>
                     </button>
                     <button class="status-btn status-btn-received" id="btn-received">
                         <span class="status-label">RECEIVED</span>
-                        <span class="status-icon">✅</span>
                     </button>
                 `;
             } else {
@@ -1706,15 +1702,12 @@
                 buttonsContainer.innerHTML = `
                     <button class="status-btn status-btn-empty" id="btn-empty">
                         <span class="status-label">EMPTY</span>
-                        <span class="status-icon">📭</span>
                     </button>
                     <button class="status-btn status-btn-loaded" id="btn-loaded">
                         <span class="status-label">LOADED</span>
-                        <span class="status-icon">📦</span>
                     </button>
                     <button class="status-btn status-btn-shipped" id="btn-shipped">
                         <span class="status-label">SHIPPED</span>
-                        <span class="status-icon">🚚</span>
                     </button>
                 `;
             }
