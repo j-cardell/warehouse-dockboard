@@ -405,7 +405,7 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 
 .yard-slot .trailer-carrier {
     font-size: 0.875rem;
-    color: var(--text-secondary);
+    color: var(--carrier-color, var(--text-secondary));
     font-weight: 500;
 }
 
@@ -563,7 +563,7 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 .yard-trailer .trailer-carrier {
     font-size: 1.5rem;
     font-weight: 900;
-    color: #ffffff;
+    color: var(--carrier-color, #ffffff);
     text-transform: uppercase;
     letter-spacing: -0.01em;
     line-height: 1;
@@ -946,7 +946,7 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 .trailer-load-number-row {
     font-size: clamp(0.5rem, 1vmin, 0.75rem);
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--load-color, #94a3b8);
     text-align: center;
     letter-spacing: 0.02em;
     background: rgba(148, 163, 184, 0.15);
@@ -958,7 +958,7 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 .trailer-customer {
     font-size: clamp(0.5rem, 1.2vmin, 0.75rem);
     font-weight: 700;
-    color: #ffffff;
+    color: var(--customer-color, #ffffff);
     text-align: center;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -971,7 +971,7 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 .trailer-carrier {
     font-size: clamp(0.625rem, 2.5vmin, 1.5rem);
     font-weight: 900;
-    color: #ffffff;
+    color: var(--carrier-color, #ffffff);
     text-transform: uppercase;
     letter-spacing: -0.01em;
     line-height: 1.05;

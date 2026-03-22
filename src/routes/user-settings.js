@@ -13,7 +13,8 @@ const { getUserSettings, updateUserSettings } = require("../users");
 // GET /api/user/settings - Get current user's settings
 router.get("/settings", requireAuth, (req, res) => {
   const userId = req.user.userId;
-  const settings = getUserSettings(userId);
+  const facilityId = req.user.currentFacility || req.user.homeFacility;
+  const settings = getUserSettings(userId, facilityId);
 
   res.json({
     success: true,
@@ -24,9 +25,10 @@ router.get("/settings", requireAuth, (req, res) => {
 // POST /api/user/settings - Update current user's settings
 router.post("/settings", requireAuth, (req, res) => {
   const userId = req.user.userId;
+  const facilityId = req.user.currentFacility || req.user.homeFacility;
   const settings = req.body;
 
-  const result = updateUserSettings(userId, settings);
+  const result = updateUserSettings(userId, settings, facilityId);
 
   if (!result.success) {
     return res.status(400).json({ error: result.error });

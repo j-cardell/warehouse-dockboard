@@ -104,7 +104,7 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
     appointmentTime: req.body.appointmentTime
       ? sanitizeInput(req.body.appointmentTime)
       : null,
-    isLive: isLive === true || isLive === "true",
+    isLive: direction === 'inbound' ? (isLive !== false && isLive !== "false") : (isLive === true || isLive === "true"),
     location: "yard",
     createdAt: new Date().toISOString(),
   };

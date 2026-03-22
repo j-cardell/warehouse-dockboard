@@ -44,6 +44,7 @@ router.post("/staging", requireAuth, requireRole("user"), (req, res) => {
     loadNumber,
     contents,
     isLive,
+    direction = "outbound",
     appointmentTime,
     driverPhone,
     sourceId, // Optional: ID of trailer to remove from yardTrailers (for move operation)
@@ -68,7 +69,8 @@ router.post("/staging", requireAuth, requireRole("user"), (req, res) => {
     contents: contents ? sanitizeInput(contents) : null,
     appointmentTime: appointmentTime ? sanitizeInput(appointmentTime) : null,
     driverPhone: driverPhone ? sanitizeInput(driverPhone) : null,
-    isLive: isLive === true || isLive === "true",
+    isLive: direction === 'inbound' ? (isLive !== false && isLive !== "false") : (isLive === true || isLive === "true"),
+    direction: direction === 'inbound' ? 'inbound' : 'outbound',
     location: "staging",
     createdAt: new Date().toISOString(),
   };
