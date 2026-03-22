@@ -6620,7 +6620,7 @@ async function loadShipped(search = '') {
             ${t.customer ? `<div class="shipped-detail"><span class="shipped-detail-label">Customer:</span> ${t.customer}</div>` : ''}
             ${t.loadNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Load:</span> ${t.loadNumber}</div>` : ''}
             ${t.doorNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Door:</span> ${t.doorNumber}</div>` : ''}
-            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Contents:</span> ${t.contents}</div>` : ''}
+            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Notes:</span> ${t.contents}</div>` : ''}
           </div>
         </div>
       `;
@@ -6764,7 +6764,7 @@ async function loadReceived(search = '') {
             ${t.customer ? `<div class="shipped-detail"><span class="shipped-detail-label">Customer:</span> ${t.customer}</div>` : ''}
             ${t.loadNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Load:</span> ${t.loadNumber}</div>` : ''}
             ${t.doorNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Door:</span> ${t.doorNumber}</div>` : ''}
-            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Contents:</span> ${t.contents}</div>` : ''}
+            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Notes:</span> ${t.contents}</div>` : ''}
           </div>
         </div>
       `;
