@@ -228,6 +228,8 @@ A simplified interface at `/loader.html` for forklift operators to quickly updat
 
 <img width="461" height="595" alt="image" src="https://github.com/user-attachments/assets/00d8f638-c6aa-4407-b90e-ed8dd5f83b15" />
 
+<img width="884" height="418" alt="image" src="https://github.com/user-attachments/assets/ff9077da-c8aa-4dbd-ad71-14665c49ead1" />
+
 **Note:** To repeat, this is currently designed for shared tablet scenarios. Future versions will support individual devices with distinct user credentials.
 
 **Staging Area** - Use this for trailers awaiting assignment:
