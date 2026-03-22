@@ -207,6 +207,7 @@ The server will refuse to start if:
 ### Loader Tablet Interface (WIP)
 
 A simplified interface at `/loader.html` for forklift operators to quickly update trailer status without accessing the full dashboard.
+
 <img width="603" height="669" alt="image" src="https://github.com/user-attachments/assets/9b51bc2a-3d9c-410d-950d-b423ffabf76e" />
 
 **Current Implementation:**
