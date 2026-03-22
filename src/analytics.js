@@ -84,8 +84,17 @@ function calculateDailyDwell(date, facilityId = null, timezone = "UTC") {
   const violatorList = [];
 
   // Track trailers that were at doors during this day
-  // Map: trailerId -> { doorId, doorNumber, carrier, arrivedAt, departedAt, dwellAtEndOfDay }
+  // Map: trailerId -> { doorId, doorNumber, carrier, arrivedAt, departedAt, dwellAtEndOfDay, direction }
   const trailerDoors = new Map();
+
+  // Build a direction map from current state for reference
+  const directionMap = {};
+  state.trailers?.forEach(t => {
+    if (t.id) directionMap[t.id] = t.direction || 'outbound';
+  });
+  state.yardTrailers?.forEach(t => {
+    if (t.id) directionMap[t.id] = t.direction || 'outbound';
+  });
 
   // Process history entries to find trailers at doors during this day
   const entries = history?.entries || [];
@@ -109,6 +118,7 @@ function calculateDailyDwell(date, facilityId = null, timezone = "UTC") {
           customer: entry.customer,
           driverName: entry.driverName,
           loadNumber: entry.loadNumber,
+          direction: entry.direction || directionMap[entry.trailerId] || 'outbound',
           arrivedAt: entryTime,
           departedAt: null,
         });
@@ -154,6 +164,7 @@ function calculateDailyDwell(date, facilityId = null, timezone = "UTC") {
           customer: t.customer,
           driverName: t.driverName,
           loadNumber: t.loadNumber,
+          direction: t.direction || 'outbound',
           arrivedAt: startTime, // Store actual arrival time, not capped
           departedAt: null,
         });
@@ -235,6 +246,18 @@ function calculateDailyDwell(date, facilityId = null, timezone = "UTC") {
           const totalDwellMs = actualEndTime - originalArrival;
           const totalDwellHours = totalDwellMs / (1000 * 60 * 60);
 
+          // Calculate when the trailer became a violation (crossed 2-hour threshold)
+          let violationTimestamp;
+          if (originalArrival >= dayStart) {
+            // Arrived today - violation is 2 hours after arrival
+            violationTimestamp = new Date(originalArrival + (2 * 60 * 60 * 1000)).toISOString();
+          } else {
+            // Arrived before today - calculate when it crossed 2 hours today
+            const previousDwellMs = dayStart - originalArrival;
+            const remainingMs = (2 * 60 * 60 * 1000) - previousDwellMs;
+            violationTimestamp = new Date(dayStart + remainingMs).toISOString();
+          }
+
           const violator = {
             trailerId,
             carrier: info.carrier,
@@ -244,6 +267,9 @@ function calculateDailyDwell(date, facilityId = null, timezone = "UTC") {
             loadNumber: info.loadNumber,
             dwellHours: Math.round(totalDwellHours * 100) / 100,
             doorNumber: info.doorNumber,
+            direction: info.direction || 'outbound',
+            facility: facilityId,
+            recordedAt: violationTimestamp,
           };
           violatorList.push(violator);
         }
@@ -288,7 +314,7 @@ function recordDwellSnapshot(facilityId = null, timezone = "UTC") {
   calculateDailyDwell(today, facilityId, timezone);
 }
 
-function getDwellViolations(period = "day", facilityId = null, timezone = "UTC") {
+function getDwellViolations(period = "day", facilityId = null, timezone = "UTC", direction = null) {
   const analytics = loadAnalytics(facilityId);
   const now = new Date();
   const result = [];
@@ -312,6 +338,13 @@ function getDwellViolations(period = "day", facilityId = null, timezone = "UTC")
         dayStats = calculateDailyDwell(dateKey, facilityId, timezone);
       }
 
+      // Filter violators by direction if specified
+      let violators = dayStats?.violators || [];
+      if (direction && violators.length > 0) {
+        // Violators now have direction stored from calculateDailyDwell
+        violators = violators.filter(v => v.direction === direction);
+      }
+
       // Get weekday in facility's timezone
       const weekday = d.toLocaleDateString("en-US", {
         weekday: "short",
@@ -321,9 +354,9 @@ function getDwellViolations(period = "day", facilityId = null, timezone = "UTC")
       result.push({
         date: dateKey,
         label: weekday,
-        count: dayStats?.violations || 0,
+        count: direction ? violators.length : (dayStats?.violations || 0),
         avgDwell: dayStats?.avgDwell || 0,
-        trailers: dayStats?.violators || [],
+        trailers: violators,
       });
     }
   }

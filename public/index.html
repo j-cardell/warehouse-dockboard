@@ -165,6 +165,7 @@
                 <button id="btn-create-trailer" class="btn btn-primary">➕ Add Trailer</button>
                 <button id="btn-view-history" class="btn btn-secondary">📜 History</button>
                 <button id="btn-view-shipped" class="btn btn-secondary">📦 Shipped</button>
+                <button id="btn-view-received" class="btn btn-secondary">📥 Received</button>
                 <button id="btn-view-unassigned" class="btn btn-secondary">🚛 Unassigned Yard <span id="unassigned-count-badge" class="count-badge">0</span></button>
                 <button id="btn-analytics" class="btn btn-secondary">📊 Analytics</button>
                 <button id="btn-manage-carriers" class="btn btn-secondary">🚛 Carriers</button>
@@ -342,6 +343,13 @@
                         <button type="button" id="btn-quick-add" class="btn btn-primary">Add Trailer</button>
                     </div>
                     <div class="quick-add-toggle">
+                        <label class="switch-container">
+                            <div class="switch">
+                                <input type="checkbox" id="quick-add-direction">
+                                <span class="slider"></span>
+                            </div>
+                            <span class="switch-label"><span id="quick-direction-label">⬆️ Outbound</span></span>
+                        </label>
                         <button type="button" id="btn-show-full-form" class="btn btn-link">📋 Show Full Form for more details</button>
                     </div>
                 </div>
@@ -378,12 +386,25 @@
                         <label for="driver-phone">Phone Number</label>
                         <input type="tel" id="driver-phone" name="driverPhone" placeholder="Optional">
                     </div>
-                    <div class="form-group">
-                        <label for="load-type">Load Type *</label>
-                        <select id="load-type" name="loadType" required>
-                            <option value="loaded">📦 Loaded</option>
-                            <option value="empty">📭 Empty</option>
-                        </select>
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label class="switch-container">
+                                <div class="switch">
+                                    <input type="checkbox" id="trailer-direction" name="direction">
+                                    <span class="slider"></span>
+                                </div>
+                                <span class="switch-label"><span id="direction-label">⬆️ Outbound</span></span>
+                            </label>
+                        </div>
+                        <div class="form-group half">
+                            <label class="switch-container">
+                                <div class="switch">
+                                    <input type="checkbox" id="load-type" name="loadType">
+                                    <span class="slider"></span>
+                                </div>
+                                <span class="switch-label"><span id="status-label">📭 Empty</span></span>
+                            </label>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="switch-container">
@@ -430,6 +451,7 @@
                         <label><input type="checkbox" id="filter-today" checked> Today only</label>
                         <label><input type="checkbox" id="filter-dock"> Dock movements</label>
                         <label><input type="checkbox" id="filter-yard"> Yard movements</label>
+                        <label>User: <select id="filter-user"><option value="">All users</option></select></label>
                     </div>
                 </div>
                 <div id="history-list" class="history-list">
@@ -480,6 +502,13 @@
                     <input type="text" id="shipped-search" placeholder="🔍 Search by trailer number, carrier, customer, or load...">
                     <button id="shipped-clear" class="btn btn-icon" title="Clear search">✕</button>
                     <button id="shipped-refresh" class="btn btn-secondary">🔄 Refresh</button>
+                    <button id="shipped-export" class="btn btn-primary" title="Export to Excel">📊 Export</button>
+                </div>
+                <div class="shipped-filters">
+                    <label>From: <input type="date" id="shipped-date-from"></label>
+                    <label>To: <input type="date" id="shipped-date-to"></label>
+                    <button id="shipped-date-clear" class="btn btn-sm btn-secondary">Clear Dates</button>
+                    <label>User: <select id="shipped-filter-user"><option value="">All users</option></select></label>
                 </div>
                 <div class="shipped-stats">
                     <span id="shipped-count">0 shipped orders</span>
@@ -489,6 +518,38 @@
                     <!-- Shipped trailers will be rendered here -->
                 </div>
                 <div id="shipped-empty" class="shipped-empty hidden">No shipped orders found.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Received Orders Modal -->
+    <div id="modal-received" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h2>📥 Received Orders (Inbound)</h2>
+                <button class="close-modal">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="search-bar">
+                    <input type="text" id="received-search" placeholder="🔍 Search by trailer number, carrier, customer, or load...">
+                    <button id="received-clear" class="btn btn-icon" title="Clear search">✕</button>
+                    <button id="received-refresh" class="btn btn-secondary">🔄 Refresh</button>
+                    <button id="received-export" class="btn btn-primary" title="Export to Excel">📊 Export</button>
+                </div>
+                <div class="shipped-filters">
+                    <label>From: <input type="date" id="received-date-from"></label>
+                    <label>To: <input type="date" id="received-date-to"></label>
+                    <button id="received-date-clear" class="btn btn-sm btn-secondary">Clear Dates</button>
+                    <label>User: <select id="received-filter-user"><option value="">All users</option></select></label>
+                </div>
+                <div class="shipped-stats">
+                    <span id="received-count">0 received orders</span>
+                    <span id="received-date-range"></span>
+                </div>
+                <div id="received-list" class="shipped-list">
+                    <!-- Received trailers will be rendered here -->
+                </div>
+                <div id="received-empty" class="shipped-empty hidden">No received orders found.</div>
             </div>
         </div>
     </div>

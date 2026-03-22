@@ -14,7 +14,9 @@ const state = {
   carriers: [],
   staging: null,
   queuedTrailers: [],
-  appointmentQueue: []
+  appointmentQueue: [],
+  shippedTrailers: [],
+  receivedTrailers: []
 };
 
 // Utility: Escape HTML to prevent XSS
@@ -1381,6 +1383,7 @@ async function createTrailer(data) { return apiCall('/trailers', 'POST', data); 
 async function deleteTrailer(id) { return apiCall(`/trailers/${id}`, 'DELETE'); }
 async function updateTrailer(id, data) { return apiCall(`/trailers/${id}`, 'PUT', data); }
 async function shipTrailer(id) { return apiCall(`/trailers/${id}/ship`, 'POST'); }
+async function receiveTrailer(id) { return apiCall(`/trailers/${id}/receive`, 'POST'); }
 
 // Staging & Queue API
 async function getStaging() { return apiCall('/staging'); }
@@ -2267,6 +2270,16 @@ async function showAnalyticsModal() {
           <button class="analytics-tab" data-view="patterns">Position Patterns</button>
         </div>
         <div class="analytics-violations" id="violations-container">
+          <div class="violations-filters">
+            <div class="filter-group">
+              <label>Direction</label>
+              <select id="violations-direction-filter">
+                <option value="">All Directions</option>
+                <option value="inbound">Inbound</option>
+                <option value="outbound">Outbound</option>
+              </select>
+            </div>
+          </div>
           <div class="violations-header">
             <h4>Current Trailers Exceeding 2 Hours</h4>
             <span class="violations-count" id="current-violation-count">0</span>
@@ -2283,6 +2296,14 @@ async function showAnalyticsModal() {
         </div>
         <div class="analytics-patterns hidden" id="patterns-container">
           <div class="patterns-filters">
+            <div class="filter-group">
+              <label>Direction</label>
+              <select id="pattern-direction-filter">
+                <option value="">All Directions</option>
+                <option value="inbound">Inbound</option>
+                <option value="outbound">Outbound</option>
+              </select>
+            </div>
             <div class="filter-group">
               <label>Carrier</label>
               <select id="pattern-carrier-filter">
@@ -2334,7 +2355,7 @@ async function showAnalyticsModal() {
       <div class="modal-actions">
         ${editMode ? `<button class="btn btn-success" id="btn-capture-now">📸 Force Calculation</button>
         <button class="btn btn-primary" id="btn-refresh-analytics">🔄 Refresh</button>` : ''}
-        <button class="btn btn-secondary" id="btn-export-patterns">📥 Export CSV</button>
+        <button class="btn btn-secondary" id="btn-export-analytics" data-view="violations">📥 Export Excel</button>
         ${editMode ? `<button class="btn btn-danger" id="btn-clear-analytics">🗑️ Clear All History</button>` : ''}
         <button class="btn btn-secondary close-modal">Close</button>
       </div>
@@ -2346,6 +2367,7 @@ async function showAnalyticsModal() {
   let currentPeriod = 'day';
   let analyticsData = null;
   let currentFacilityFilter = 'current';
+  let currentViolationsDirection = '';
 
   // Populate facility dropdown if in multi-facility mode
   const facilitySelect = document.getElementById('analytics-facility-select');
@@ -2545,16 +2567,23 @@ async function showAnalyticsModal() {
       // Show appropriate view
       const clearBtn = document.getElementById('btn-clear-analytics');
 
+      const exportBtn = document.getElementById('btn-export-analytics');
       if (currentView === 'violations') {
         document.getElementById('violations-container')?.classList.remove('hidden');
         document.getElementById('btn-capture-now')?.classList.remove('hidden');
-        document.getElementById('btn-export-patterns')?.classList.add('hidden');
+        if (exportBtn) {
+          exportBtn.dataset.view = 'violations';
+          exportBtn.textContent = '📥 Export Excel';
+        }
         if (clearBtn) clearBtn.textContent = '🗑️ Clear All History';
         loadViolations();
       } else if (currentView === 'patterns') {
         document.getElementById('patterns-container')?.classList.remove('hidden');
         document.getElementById('btn-capture-now')?.classList.add('hidden');
-        document.getElementById('btn-export-patterns')?.classList.remove('hidden');
+        if (exportBtn) {
+          exportBtn.dataset.view = 'patterns';
+          exportBtn.textContent = '📥 Export Excel';
+        }
         if (clearBtn) clearBtn.textContent = '🧹 Clear Pattern Data';
         loadPatterns();
       }
@@ -2581,15 +2610,21 @@ async function showAnalyticsModal() {
 
       console.log('[DEBUG loadViolations] facilityParam:', facilityParam);
 
+      // Build direction filter param
+      const directionParam = currentViolationsDirection
+        ? `&direction=${encodeURIComponent(currentViolationsDirection)}`
+        : '';
+
       // Load current violations
       const currentUrl = facilityParam
-        ? `/analytics/current-violations?${facilityParam.slice(1)}`
-        : '/analytics/current-violations';
+        ? `/analytics/current-violations?${facilityParam.slice(1)}${directionParam}`
+        : `/analytics/current-violations?${directionParam.slice(1)}`;
       const currentData = await apiCall(currentUrl);
 
       document.getElementById('current-violation-count').textContent = currentData.count;
 
       const list = document.getElementById('violations-list');
+
       if (currentData.trailers.length === 0) {
         list.innerHTML = '<div class="violations-empty">✅ No trailers currently exceeding 2 hours</div>';
       } else {
@@ -2620,9 +2655,28 @@ async function showAnalyticsModal() {
       }
 
       // Load historical violation counts
-      const histData = await apiCall(`/analytics/violations?period=day${facilityParam}`);
+      let chartData, chartDirection = currentViolationsDirection;
+      if (currentViolationsDirection) {
+        // Single direction selected - fetch filtered data
+        const histData = await apiCall(`/analytics/violations?period=day${facilityParam}${directionParam}`);
+        chartData = histData.data;
+      } else {
+        // All directions - fetch both separately for side-by-side display
+        const [inboundData, outboundData] = await Promise.all([
+          apiCall(`/analytics/violations?period=day${facilityParam}&direction=inbound`),
+          apiCall(`/analytics/violations?period=day${facilityParam}&direction=outbound`)
+        ]);
+        // Merge the data
+        chartData = inboundData.data.map((d, i) => ({
+          ...d,
+          inboundCount: d.count,
+          outboundCount: outboundData.data[i]?.count || 0,
+          inboundViolators: d.trailers || [],
+          outboundViolators: outboundData.data[i]?.trailers || []
+        }));
+      }
 
-      renderViolationsChart(histData.data);
+      renderViolationsChart(chartData, chartDirection);
 
     } catch (error) {
       console.error('Violations load error:', error);
@@ -2634,8 +2688,8 @@ async function showAnalyticsModal() {
   let violationsChartData = null;
   let violationsChartDimensions = null;
 
-  function renderViolationsChart(data) {
-    console.log('[DEBUG renderViolationsChart] input data:', data);
+  function renderViolationsChart(data, directionFilter = '') {
+    console.log('[DEBUG renderViolationsChart] input data:', data, 'direction:', directionFilter);
     const canvas = document.getElementById('violations-chart');
     if (!canvas || !data || data.length === 0) return;
 
@@ -2655,7 +2709,7 @@ async function showAnalyticsModal() {
 
     const width = rect.width || 800;
     const height = rect.height || 300;
-    const padding = { top: 30, right: 20, bottom: 50, left: 50 };
+    const padding = { top: 30, right: 20, bottom: 60, left: 50 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
@@ -2666,8 +2720,16 @@ async function showAnalyticsModal() {
     // Clear
     ctx.clearRect(0, 0, width, height);
 
+    // Determine if showing side-by-side bars (all directions)
+    const showSideBySide = !directionFilter && data[0]?.hasOwnProperty('inboundCount');
+
     // Find max
-    const maxCount = Math.max(...data.map(d => d.count || 0), 5);
+    let maxCount;
+    if (showSideBySide) {
+      maxCount = Math.max(...data.map(d => Math.max(d.inboundCount || 0, d.outboundCount || 0)), 5);
+    } else {
+      maxCount = Math.max(...data.map(d => d.count || 0), 5);
+    }
 
     // Draw grid
     ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
@@ -2688,45 +2750,119 @@ async function showAnalyticsModal() {
     }
 
     // Draw bars
-    const barWidth = chartWidth / data.length * 0.7;
+    const groupWidth = chartWidth / data.length * 0.7;
     const spacing = chartWidth / data.length * 0.3;
+    const halfBarWidth = groupWidth / 2 - 2; // Half width with small gap
 
     data.forEach((d, i) => {
-      const x = padding.left + i * (barWidth + spacing) + spacing / 2;
-      const barHeight = ((d.count || 0) / maxCount) * chartHeight;
-      const y = padding.top + chartHeight - barHeight;
-
-      // Red bars for violations
-      ctx.fillStyle = d.count > 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(148, 163, 184, 0.3)';
-      ctx.fillRect(x, y, barWidth, barHeight);
+      const groupX = padding.left + i * (groupWidth + spacing) + spacing / 2;
 
       // Label (day name)
       ctx.fillStyle = '#94a3b8';
       ctx.font = '11px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(d.label || '', x + barWidth / 2, height - 25);
+      ctx.fillText(d.label || '', groupX + groupWidth / 2, height - 40);
 
       // Date label (M/D format)
       const dateObj = new Date(d.date);
       const dateStr = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
       ctx.fillStyle = '#64748b';
       ctx.font = '10px sans-serif';
-      ctx.fillText(dateStr, x + barWidth / 2, height - 10);
+      ctx.fillText(dateStr, groupX + groupWidth / 2, height - 25);
 
-      // Count on bar
-      if (d.count > 0) {
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText(d.count.toString(), x + barWidth / 2, y - 5);
+      if (showSideBySide) {
+        // Draw two bars side by side
+        // Inbound bar (left, blue)
+        const inboundHeight = ((d.inboundCount || 0) / maxCount) * chartHeight;
+        const inboundY = padding.top + chartHeight - inboundHeight;
+        ctx.fillStyle = d.inboundCount > 0 ? 'rgba(59, 130, 246, 0.8)' : 'rgba(59, 130, 246, 0.15)';
+        ctx.fillRect(groupX, inboundY, halfBarWidth, inboundHeight);
+
+        // Outbound bar (right, red)
+        const outboundHeight = ((d.outboundCount || 0) / maxCount) * chartHeight;
+        const outboundY = padding.top + chartHeight - outboundHeight;
+        ctx.fillStyle = d.outboundCount > 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(239, 68, 68, 0.15)';
+        ctx.fillRect(groupX + halfBarWidth + 4, outboundY, halfBarWidth, outboundHeight);
+
+        // Count labels
+        if (d.inboundCount > 0) {
+          ctx.fillStyle = '#3b82f6';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText(d.inboundCount.toString(), groupX + halfBarWidth / 2, inboundY - 5);
+        }
+        if (d.outboundCount > 0) {
+          ctx.fillStyle = '#ef4444';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.fillText(d.outboundCount.toString(), groupX + halfBarWidth + 4 + halfBarWidth / 2, outboundY - 5);
+        }
+      } else {
+        // Single bar
+        const count = d.count || 0;
+        const barHeight = (count / maxCount) * chartHeight;
+        const y = padding.top + chartHeight - barHeight;
+
+        // Color based on direction filter
+        if (directionFilter === 'inbound') {
+          ctx.fillStyle = count > 0 ? 'rgba(59, 130, 246, 0.8)' : 'rgba(59, 130, 246, 0.15)';
+        } else {
+          ctx.fillStyle = count > 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(148, 163, 184, 0.3)';
+        }
+        ctx.fillRect(groupX, y, groupWidth, barHeight);
+
+        // Count on bar
+        if (count > 0) {
+          ctx.fillStyle = directionFilter === 'inbound' ? '#3b82f6' : '#ef4444';
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(count.toString(), groupX + groupWidth / 2, y - 5);
+        }
       }
-
     });
 
-    // Add click hint
-    ctx.fillStyle = '#64748b';
-    ctx.font = '11px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Click a bar to view trailers', width / 2, height - 5);
+    // Draw legend for side-by-side
+    if (showSideBySide) {
+      const legendY = height - 8;
+      // Inbound legend
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
+      ctx.fillRect(width / 2 - 80, legendY - 8, 12, 12);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('Inbound', width / 2 - 65, legendY + 2);
+
+      // Outbound legend
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+      ctx.fillRect(width / 2 + 10, legendY - 8, 12, 12);
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('Outbound', width / 2 + 25, legendY + 2);
+
+      // Click hint at top
+      ctx.textAlign = 'center';
+      ctx.fillText('Click a bar to view trailers', width / 2, padding.top - 8);
+    } else if (directionFilter === 'inbound') {
+      // Legend at bottom
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.8)';
+      ctx.fillRect(width / 2 - 30, height - 13, 12, 12);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('Inbound Violations', width / 2 - 15, height - 5);
+
+      // Click hint at top
+      ctx.textAlign = 'center';
+      ctx.fillText('Click a bar to view trailers', width / 2, padding.top - 8);
+    } else {
+      // Outbound/All - Legend at bottom, click hint at top
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.8)';
+      ctx.fillRect(width / 2 - 30, height - 13, 12, 12);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('Outbound Violations', width / 2 - 15, height - 5);
+
+      // Click hint at top
+      ctx.textAlign = 'center';
+      ctx.fillText('Click a bar to view trailers', width / 2, padding.top - 8);
+    }
 
     // Add click handler (remove old one first)
     canvas.onclick = (e) => {
@@ -2747,38 +2883,56 @@ async function showAnalyticsModal() {
       }
 
       // Calculate which bar was clicked
-      const barWidth = chartWidth / data.length * 0.7;
+      const groupWidth = chartWidth / data.length * 0.7;
       const spacing = chartWidth / data.length * 0.3;
+      const halfBarWidth = groupWidth / 2 - 2;
 
       // Find the bar index
       const chartX = clickX - padding.left;
-      const barIndex = Math.floor(chartX / (barWidth + spacing));
+      const barIndex = Math.floor(chartX / (groupWidth + spacing));
 
       console.log('[DEBUG click] barIndex:', barIndex, 'total bars:', data.length);
 
       // Verify the click is actually on a bar (not in the spacing)
-      const barStart = barIndex * (barWidth + spacing) + spacing / 2;
-      const barEnd = barStart + barWidth;
+      const groupStart = barIndex * (groupWidth + spacing) + spacing / 2;
+      const groupEnd = groupStart + groupWidth;
 
-      console.log('[DEBUG click] barIndex calculated:', barIndex, 'barStart:', barStart, 'barEnd:', barEnd, 'chartX:', chartX);
+      console.log('[DEBUG click] barIndex calculated:', barIndex, 'groupStart:', groupStart, 'groupEnd:', groupEnd, 'chartX:', chartX);
 
-      if (chartX >= barStart && chartX <= barEnd && barIndex >= 0 && barIndex < data.length) {
+      if (chartX >= groupStart && chartX <= groupEnd && barIndex >= 0 && barIndex < data.length) {
         const dayData = data[barIndex];
         console.log('[DEBUG Chart Click] CLICKED barIndex:', barIndex);
         console.log('[DEBUG Chart Click] dayData.date:', dayData.date, 'dayData.label:', dayData.label);
         console.log('[DEBUG Chart Click] full dayData:', dayData);
-        if (dayData.count > 0) {
-          // API returns violators, not trailers
-          const violators = dayData.violators || dayData.trailers || [];
-          console.log('[Violations Click] violators:', violators);
-          showDayViolationsModal(dayData.date, dayData.label, violators, dayData.count);
+
+        // Determine which direction was clicked (for side-by-side view)
+        const clickedDirection = !directionFilter && dayData.hasOwnProperty('inboundCount')
+          ? (chartX < groupStart + halfBarWidth ? 'inbound' : 'outbound')
+          : directionFilter;
+
+        const count = clickedDirection === 'inbound' ? dayData.inboundCount :
+                     clickedDirection === 'outbound' ? dayData.outboundCount :
+                     dayData.count;
+
+        if (count > 0) {
+          // Get the correct violators based on which bar was clicked
+          let violators;
+          if (clickedDirection === 'inbound') {
+            violators = dayData.inboundViolators || dayData.trailers || [];
+          } else if (clickedDirection === 'outbound') {
+            violators = dayData.outboundViolators || [];
+          } else {
+            violators = dayData.violators || dayData.trailers || [];
+          }
+          console.log('[Violations Click] violators:', violators, 'direction:', clickedDirection);
+          showDayViolationsModal(dayData.date, dayData.label, violators, count, clickedDirection);
         }
       }
     };
   }
 
   // Show modal with trailers for a specific day's violations
-  function showDayViolationsModal(date, label, trailers, violationCount) {
+  function showDayViolationsModal(date, label, trailers, violationCount, direction = '') {
     // Ensure trailers is an array
     const trailerList = Array.isArray(trailers) ? trailers : [];
     // Use violationCount if provided, otherwise count the trailers
@@ -2919,7 +3073,7 @@ async function showAnalyticsModal() {
   });
   
   // Position Patterns functions
-  let currentPatternFilters = { carrier: '', customer: '', dateFrom: '', dateTo: '' };
+  let currentPatternFilters = { carrier: '', customer: '', dateFrom: '', dateTo: '', direction: '' };
   
   // Set default dates (last 30 days)
   const today = new Date().toISOString().split('T')[0];
@@ -2932,6 +3086,7 @@ async function showAnalyticsModal() {
       if (currentPatternFilters.customer) params.append('customer', currentPatternFilters.customer);
       if (currentPatternFilters.dateFrom) params.append('dateFrom', currentPatternFilters.dateFrom);
       if (currentPatternFilters.dateTo) params.append('dateTo', currentPatternFilters.dateTo);
+      if (currentPatternFilters.direction) params.append('direction', currentPatternFilters.direction);
       // Add facility filter
       if (currentFacilityFilter !== 'current') {
         params.append('facilities', currentFacilityFilter);
@@ -3163,70 +3318,130 @@ function renderPatternsHeatmap(doorStats) {
   }
   
   // Pattern filter handlers
+  document.getElementById('pattern-direction-filter')?.addEventListener('change', (e) => {
+    currentPatternFilters.direction = e.target.value;
+    loadPatterns();
+  });
+
   document.getElementById('pattern-carrier-filter')?.addEventListener('change', (e) => {
     currentPatternFilters.carrier = e.target.value;
     loadPatterns();
   });
-  
+
   document.getElementById('pattern-customer-filter')?.addEventListener('change', (e) => {
     currentPatternFilters.customer = e.target.value;
     loadPatterns();
   });
-  
+
   document.getElementById('pattern-date-from')?.addEventListener('change', (e) => {
     currentPatternFilters.dateFrom = e.target.value;
     loadPatterns();
   });
-  
+
   document.getElementById('pattern-date-to')?.addEventListener('change', (e) => {
     currentPatternFilters.dateTo = e.target.value;
     loadPatterns();
   });
-  
+
   document.getElementById('btn-clear-pattern-filters')?.addEventListener('click', () => {
+    document.getElementById('pattern-direction-filter').value = '';
     document.getElementById('pattern-carrier-filter').value = '';
     document.getElementById('pattern-customer-filter').value = '';
     document.getElementById('pattern-date-from').value = '';
     document.getElementById('pattern-date-to').value = '';
-    currentPatternFilters = { carrier: '', customer: '', dateFrom: '', dateTo: '' };
+    currentPatternFilters = { carrier: '', customer: '', dateFrom: '', dateTo: '', direction: '' };
     loadPatterns();
   });
+
+  // Violations direction filter handler
+  document.getElementById('violations-direction-filter')?.addEventListener('change', (e) => {
+    currentViolationsDirection = e.target.value;
+    loadViolations();
+  });
   
-  // Export patterns to CSV
-  document.getElementById('btn-export-patterns')?.addEventListener('click', async () => {
+  // Export analytics to CSV
+  document.getElementById('btn-export-analytics')?.addEventListener('click', async () => {
+    const exportBtn = document.getElementById('btn-export-analytics');
+    const view = exportBtn?.dataset.view || 'violations';
+
     try {
-      const params = new URLSearchParams();
-      if (currentPatternFilters.carrier) params.append('carrier', currentPatternFilters.carrier);
-      if (currentPatternFilters.customer) params.append('customer', currentPatternFilters.customer);
-      if (currentPatternFilters.dateFrom) params.append('dateFrom', currentPatternFilters.dateFrom);
-      if (currentPatternFilters.dateTo) params.append('dateTo', currentPatternFilters.dateTo);
-      
-      const data = await apiCall(`/analytics/position-patterns?${params.toString()}`);
-      
-      // Build CSV
-      let csv = 'Door Number,Frequency,Top Carriers,Top Customers\n';
-      data.doorStats.forEach(d => {
-        const carriers = d.topCarriers.map(([c, count]) => `${c} (${count})`).join('; ');
-        const customers = d.topCustomers.map(([c, count]) => `${c} (${count})`).join('; ');
-        csv += `${d.doorNumber},${d.frequency},"${carriers}","${customers}"\n`;
-      });
-      
-      // Download
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `door-patterns-${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      showToast('CSV exported!', 'success');
+      if (view === 'patterns') {
+        // Export patterns - download Excel file
+        const params = new URLSearchParams();
+        if (currentPatternFilters.carrier) params.append('carrier', currentPatternFilters.carrier);
+        if (currentPatternFilters.customer) params.append('customer', currentPatternFilters.customer);
+        if (currentPatternFilters.dateFrom) params.append('dateFrom', currentPatternFilters.dateFrom);
+        if (currentPatternFilters.dateTo) params.append('dateTo', currentPatternFilters.dateTo);
+        if (currentPatternFilters.direction) params.append('direction', currentPatternFilters.direction);
+
+        const authHeader = getAuthHeader();
+        const response = await fetch(`/api/analytics/export-patterns?${params.toString()}`, {
+          headers: authHeader ? { 'Authorization': authHeader } : {}
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Export failed' }));
+          throw new Error(error.error || 'Export failed');
+        }
+
+        // Download the Excel file
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const contentDisposition = response.headers.get('content-disposition');
+        const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/);
+        const filename = filenameMatch?.[1] || `patterns-${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        // Export violations - download Excel file with multiple sheets
+        const params = new URLSearchParams();
+        if (currentViolationsDirection) {
+          params.append('direction', currentViolationsDirection);
+        }
+        if (currentFacilityFilter !== 'current') {
+          params.append('facilities', currentFacilityFilter);
+        }
+        const queryString = params.toString();
+        const url = `/api/analytics/export-violations${queryString ? '?' + queryString : ''}`;
+
+        const authHeader = getAuthHeader();
+        const response = await fetch(url, {
+          headers: authHeader ? { 'Authorization': authHeader } : {}
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Export failed' }));
+          throw new Error(error.error || 'Export failed');
+        }
+
+        // Download the Excel file
+        const blob = await response.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const contentDisposition = response.headers.get('content-disposition');
+        const filenameMatch = contentDisposition?.match(/filename="?([^"]+)"?/);
+        const filename = filenameMatch?.[1] || `violations-${new Date().toISOString().split('T')[0]}.xlsx`;
+
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+      }
+
+      showToast('Excel exported!', 'success');
     } catch (error) {
       showToast('Export failed: ' + error.message, 'error');
     }
   });
+
   
   // Force Calculation handler - recalculate today's dwell from history
   document.getElementById('btn-capture-now')?.addEventListener('click', async () => {
@@ -3358,26 +3573,31 @@ function renderQuickCarrierButtons() {
       const targetDoor = form?.dataset.targetDoor;
       const targetStaging = form?.dataset.targetStaging === 'true';
       const isLive = document.getElementById('quick-add-live')?.checked || false;
-      
+      const isInbound = document.getElementById('quick-add-direction')?.checked || false;
+      const direction = isInbound ? 'inbound' : 'outbound';
+      // Inbound trailers arrive loaded, outbound trailers arrive empty
+      const status = isInbound ? 'loaded' : 'empty';
+
       try {
         // Find carrier to get ID for usage tracking
         const carrier = state.carriers.find(c => c.name === carrierName);
-        
+
         // Increment usage count
         if (carrier) {
           apiCall(`/carriers/${carrier.id}/use`, 'POST').catch(() => {});
           carrier.usageCount = (carrier.usageCount || 0) + 1;
         }
-        
+
         if (targetStaging) {
           // Add directly to staging
-          await addToStaging({ carrier: carrierName, status: 'empty', isLive });
+          await addToStaging({ carrier: carrierName, status, direction, isLive });
           showToast(`✅ ${carrierName} trailer added to Staging!`, 'success');
         } else {
           // Original logic for doors/yard
           const result = await createTrailer({
             carrier: carrierName,
-            status: 'empty', // Default to empty for quick add
+            status: status,
+            direction: direction,
             isLive
           });
           
@@ -3395,9 +3615,16 @@ function renderQuickCarrierButtons() {
         closeModal('modal-create');
         delete form.dataset.targetDoor;
         delete form.dataset.targetStaging;
-        // Reset the checkbox for next time
+        // Reset the checkboxes for next time
         const liveCheckbox = document.getElementById('quick-add-live');
         if (liveCheckbox) liveCheckbox.checked = false;
+        const directionToggle = document.getElementById('quick-add-direction');
+        if (directionToggle) {
+          directionToggle.checked = false;
+          directionToggle.closest('.switch-container')?.classList.remove('inbound-toggle');
+          const directionLabel = document.getElementById('quick-direction-label');
+          if (directionLabel) directionLabel.textContent = '⬆️ Outbound';
+        }
         await fetchState();
       } catch (error) {
         showToast(error.message, 'error');
@@ -3421,6 +3648,7 @@ async function fetchState() {
     state.yardSlots = newState.yardSlots || [];
     state.carriers = newState.carriers || [];
     state.shippedTrailers = newState.shippedTrailers || [];
+    state.receivedTrailers = newState.receivedTrailers || [];
     state.staging = newState.staging || null;
     state.queuedTrailers = newState.queuedTrailers || [];
     state.appointmentQueue = newState.appointmentQueue || [];
@@ -3536,6 +3764,18 @@ function connectSSE() {
         fetchState();
       } catch (err) {
         console.error('[SSE] Failed to parse stateChange:', err);
+      }
+    });
+
+    // Listen for toast notifications from loader actions
+    sseConnection.addEventListener('toast', (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.message) {
+          showToast(data.message, data.type || 'info');
+        }
+      } catch (err) {
+        console.error('[SSE] Failed to parse toast:', err);
       }
     });
 
@@ -3753,10 +3993,17 @@ function renderDoors() {
 
     // Normal door with trailer
     if (trailer) {
-      const statusBadge = trailer.status === 'loaded' ? 
-        `<span class="badge loaded status-toggle" data-trailer-id="${trailer.id}">📦 Loaded</span>` : 
-        `<span class="badge empty status-toggle" data-trailer-id="${trailer.id}">📭 Empty</span>`;
-      const statusClass = trailer.status === 'loaded' ? 'status-loaded' : 'status-empty';
+      const isInbound = trailer.direction === 'inbound';
+      const statusBadge = trailer.status === 'loaded' ?
+        (isInbound ?
+          `<span class="badge inbound-loaded status-toggle" data-trailer-id="${trailer.id}">📦 Loaded</span>` :
+          `<span class="badge loaded status-toggle" data-trailer-id="${trailer.id}">📦 Loaded</span>`) :
+        (isInbound ?
+          `<span class="badge inbound-empty status-toggle" data-trailer-id="${trailer.id}">📭 Empty</span>` :
+          `<span class="badge empty status-toggle" data-trailer-id="${trailer.id}">📭 Empty</span>`);
+      const statusClass = trailer.status === 'loaded' ?
+        (isInbound ? 'status-inbound-loaded' : 'status-loaded') :
+        (isInbound ? 'status-inbound-empty' : 'status-empty');
       const liveClass = (trailer.isLive === true || trailer.isLive === 'true') ? 'is-live' : '';
       
       // Dwell time
@@ -4011,9 +4258,14 @@ function renderStaging() {
     highlightClass = 'dimmed';
   }
 
-  // Status class
-  const statusClass = trailer.status === 'loaded' ? 'loaded' : 'empty';
-  const statusText = trailer.status === 'loaded' ? 'LOADED' : 'EMPTY';
+  // Status class - handle inbound colors
+  const isInbound = trailer.direction === 'inbound';
+  const statusClass = trailer.status === 'loaded' ?
+    (isInbound ? 'inbound-loaded' : 'loaded') :
+    (isInbound ? 'inbound-empty' : 'empty');
+  const statusText = trailer.status === 'loaded' ?
+    (isInbound ? 'INBOUND LOADED' : 'LOADED') :
+    (isInbound ? 'INBOUND EMPTY' : 'EMPTY');
   const liveClass = (trailer.isLive === true || trailer.isLive === 'true') ? 'is-live' : '';
   
   // Build info row - trailer number and load number
@@ -4091,8 +4343,11 @@ function renderQueue() {
       }
     }
 
-    // Status class
-    const statusClass = t.status === 'loaded' ? 'loaded' : 'empty';
+    // Status class - handle inbound colors
+    const isInbound = t.direction === 'inbound';
+    const statusClass = t.status === 'loaded' ?
+      (isInbound ? 'inbound-loaded' : 'loaded') :
+      (isInbound ? 'inbound-empty' : 'empty');
     const statusText = t.status === 'loaded' ? 'LOADED' : 'EMPTY';
     const liveClass = (t.isLive === true || t.isLive === 'true') ? 'is-live' : '';
 
@@ -4101,11 +4356,11 @@ function renderQueue() {
     if (t.number) infoItems.push(`<span class="trailer-number">${t.number}</span>`);
     if (t.loadNumber) infoItems.push(`<span class="trailer-load-number">Load: ${t.loadNumber}</span>`);
     const infoRow = infoItems.length > 0 ? `<div class="yard-trailer-info">${infoItems.join('')}</div>` : '';
-    
+
     // Build driver and customer rows (customer first, then driver above carrier)
     const customerRow = t.customer ? `<div class="yard-trailer-customer">${t.customer}</div>` : '';
     const driverRow = t.driverName ? `<div class="yard-trailer-driver">${t.driverName}</div>` : '';
-    
+
     // Appointment Time Display
     let apptTimeHtml = '';
     if (t.appointmentTime) {
@@ -4246,20 +4501,23 @@ function renderAppointmentQueue() {
       }
     }
 
-    // Status class
-    const statusClass = t.status === 'loaded' ? 'loaded' : 'empty';
+    // Status class - handle inbound colors for appointment queue
+    const isInbound = t.direction === 'inbound';
+    const statusClass = t.status === 'loaded' ?
+      (isInbound ? 'inbound-loaded' : 'loaded') :
+      (isInbound ? 'inbound-empty' : 'empty');
     const statusText = t.status === 'loaded' ? 'LOADED' : 'EMPTY';
     const liveClass = (t.isLive === true || t.isLive === 'true') ? 'is-live' : '';
-    
+
     // Build info row
     let infoItems = [];
     if (t.number) infoItems.push(`<span class="trailer-number">${t.number}</span>`);
     if (t.loadNumber) infoItems.push(`<span class="trailer-load-number">Load: ${t.loadNumber}</span>`);
     const infoRow = infoItems.length > 0 ? `<div class="yard-trailer-info">${infoItems.join('')}</div>` : '';
-    
+
     const customerRow = t.customer ? `<div class="yard-trailer-customer">${t.customer}</div>` : '';
     const driverRow = t.driverName ? `<div class="yard-trailer-driver">${t.driverName}</div>` : '';
-    
+
     // Appointment Time Display
     let apptTimeHtml = '';
     if (t.appointmentTime) {
@@ -4353,11 +4611,17 @@ function renderYardSlots() {
     const selectedClass = trailer && selectedTrailers.has(trailer.id) ? 'selected' : '';
     
     if (trailer) {
+      const isInbound = trailer.direction === 'inbound';
       const statusText = trailer.status === 'loaded' ? 'LOADED' : 'EMPTY';
-      const statusClass = trailer.status === 'loaded' ? 'loaded' : 'empty';
+      const statusClass = trailer.status === 'loaded' ?
+        (isInbound ? 'inbound-loaded' : 'loaded') :
+        (isInbound ? 'inbound-empty' : 'empty');
+      const slotBorderClass = isInbound ?
+        (trailer.status === 'loaded' ? 'inbound-loaded' : 'inbound-empty') :
+        trailer.status;
       const liveClass = (trailer.isLive === true || trailer.isLive === 'true') ? 'is-live' : '';
       return `
-        <div class="yard-slot occupied ${trailer.status} ${highlightClass} ${liveClass} ${editMode ? 'slot-draggable' : ''}" data-slot="${slotNumber}" data-slot-id="${slot.id || ''}" ${editMode ? 'draggable="true"' : ''}>
+        <div class="yard-slot occupied ${slotBorderClass} ${highlightClass} ${liveClass} ${editMode ? 'slot-draggable' : ''}" data-slot="${slotNumber}" data-slot-id="${slot.id || ''}" ${editMode ? 'draggable="true"' : ''}>
           <div class="yard-slot-number">${slotNumber}</div>
           <div class="slot-content">
             <div class="slot-trailer-row slot-customer-row">${trailer.customer || ''}</div>
@@ -4773,20 +5037,24 @@ function renderUnassignedYard() {
         }
       }
       
-      // Selection state
-      const selectedClass = selectedTrailers.has(t.id) ? 'selected' : '';
-      
+      // Status class - handle inbound colors
+      const isInbound = t.direction === 'inbound';
       const statusText = t.status === 'loaded' ? 'LOADED' : 'EMPTY';
-      const statusClass = t.status === 'loaded' ? 'loaded' : 'empty';
+      const statusClass = t.status === 'loaded' ?
+        (isInbound ? 'inbound-loaded' : 'loaded') :
+        (isInbound ? 'inbound-empty' : 'empty');
+      const borderClass = isInbound ?
+        (t.status === 'loaded' ? 'inbound-loaded' : 'inbound-empty') :
+        t.status;
       const liveClass = (t.isLive === true || t.isLive === 'true') ? 'is-live' : '';
-      
+
       // Build info row with trailer number, load number (no dwell time in yard)
       let infoRow = '';
       if (t.number) infoRow += `<span class="trailer-number">${t.number}</span>`;
       if (t.loadNumber) infoRow += `<span class="trailer-load-number">${t.loadNumber}</span>`;
-      
+
       return `
-        <div class="yard-trailer ${t.status} ${highlightClass} ${searchClass} ${selectedClass} ${liveClass}" draggable="true" data-trailer-id="${t.id}">
+        <div class="yard-trailer ${borderClass} ${highlightClass} ${searchClass} ${selectedClass} ${liveClass}" draggable="true" data-trailer-id="${t.id}">
           <div class="yard-trailer-customer">${t.customer || ''}</div>
           <div class="yard-trailer-header">
             <span class="trailer-carrier">${t.carrier}</span>
@@ -5528,6 +5796,44 @@ function setupModals() {
     renderQuickCarrierButtons();
   });
 
+  // Direction toggle label update
+  document.getElementById('trailer-direction')?.addEventListener('change', (e) => {
+    const label = document.getElementById('direction-label');
+    const toggle = e.target;
+    if (label) {
+      label.textContent = toggle.checked ? '⬇️ Inbound' : '⬆️ Outbound';
+    }
+    // Add/remove blue styling for inbound
+    if (toggle.checked) {
+      toggle.closest('.switch-container')?.classList.add('inbound-toggle');
+    } else {
+      toggle.closest('.switch-container')?.classList.remove('inbound-toggle');
+    }
+  });
+
+  // Status toggle label update
+  document.getElementById('load-type')?.addEventListener('change', (e) => {
+    const label = document.getElementById('status-label');
+    if (label) {
+      label.textContent = e.target.checked ? '📦 Loaded' : '📭 Empty';
+    }
+  });
+
+  // Quick Add Direction toggle label update
+  document.getElementById('quick-add-direction')?.addEventListener('change', (e) => {
+    const label = document.getElementById('quick-direction-label');
+    const toggle = e.target;
+    if (label) {
+      label.textContent = toggle.checked ? '⬇️ Inbound' : '⬆️ Outbound';
+    }
+    // Add/remove blue styling for inbound
+    if (toggle.checked) {
+      toggle.closest('.switch-container')?.classList.add('inbound-toggle');
+    } else {
+      toggle.closest('.switch-container')?.classList.remove('inbound-toggle');
+    }
+  });
+
   // Quick Add Custom Carrier
   document.getElementById('btn-quick-add')?.addEventListener('click', async () => {
     const carrierInput = document.getElementById('quick-carrier-input');
@@ -5535,7 +5841,11 @@ function setupModals() {
     const targetDoor = form?.dataset.targetDoor;
     const targetStaging = form?.dataset.targetStaging === 'true';
     const isLive = document.getElementById('quick-add-live')?.checked || false;
-    
+    const isInbound = document.getElementById('quick-add-direction')?.checked || false;
+    const direction = isInbound ? 'inbound' : 'outbound';
+    // Inbound trailers arrive loaded, outbound trailers arrive empty
+    const status = isInbound ? 'loaded' : 'empty';
+
     const carrier = carrierInput?.value.trim();
     if (!carrier) {
       showToast('Please enter a carrier name', 'warning');
@@ -5544,13 +5854,14 @@ function setupModals() {
 
     try {
       if (targetStaging) {
-        await addToStaging({ carrier, status: 'empty', isLive });
+        await addToStaging({ carrier, status, direction, isLive });
         showToast(`✅ ${carrier} trailer added to Staging!`, 'success');
       } else {
         // Add to doors/yard based on target
         const result = await createTrailer({
           carrier: carrier,
-          status: 'empty',
+          status: status,
+          direction: direction,
           isLive
         });
         
@@ -5567,6 +5878,14 @@ function setupModals() {
       closeModal('modal-create');
       carrierInput.value = '';
       document.getElementById('quick-add-live').checked = false;
+      // Reset direction toggle
+      const directionToggle = document.getElementById('quick-add-direction');
+      if (directionToggle) {
+        directionToggle.checked = false;
+        directionToggle.closest('.switch-container')?.classList.remove('inbound-toggle');
+        const directionLabel = document.getElementById('quick-direction-label');
+        if (directionLabel) directionLabel.textContent = '⬆️ Outbound';
+      }
       delete form.dataset.targetDoor;
       delete form.dataset.targetStaging;
       await fetchState();
@@ -5590,10 +5909,16 @@ function setupModals() {
     const targetDoor = form.dataset.targetDoor;
     const targetStaging = form.dataset.targetStaging === 'true';
 
+    const directionCheckbox = document.getElementById('trailer-direction');
+    const statusCheckbox = document.getElementById('load-type');
+    const isInbound = directionCheckbox?.checked || false;
+    const isLoaded = statusCheckbox?.checked || false;
+
     const data = {
       number: document.getElementById('trailer-number')?.value || null,
       carrier: document.getElementById('carrier-input')?.value,
-      status: document.getElementById('load-type')?.value,
+      direction: isInbound ? 'inbound' : 'outbound',
+      status: isLoaded ? 'loaded' : 'empty',
       customer: document.getElementById('trailer-customer')?.value || null,
       loadNumber: document.getElementById('load-number')?.value || null,
       contents: document.getElementById('notes')?.value,
@@ -5725,8 +6050,42 @@ function setupModals() {
   document.getElementById('history-date-clear')?.addEventListener('click', () => {
     if (dateFrom) dateFrom.value = '';
     if (dateTo) dateTo.value = '';
+    // Uncheck "Today only" when clearing dates
+    const filterToday = document.getElementById('filter-today');
+    if (filterToday) filterToday.checked = false;
     loadHistory(historySearch?.value || '');
   });
+
+  // "Today only" checkbox
+  const filterToday = document.getElementById('filter-today');
+  const filterDock = document.getElementById('filter-dock');
+  const filterYard = document.getElementById('filter-yard');
+  const filterUser = document.getElementById('filter-user');
+
+  filterToday?.addEventListener('change', (e) => {
+    if (e.target.checked) {
+      // Set dates to today (using local timezone)
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const localDate = `${yyyy}-${mm}-${dd}`;
+      if (dateFrom) dateFrom.value = localDate;
+      if (dateTo) dateTo.value = localDate;
+    } else {
+      // Clear dates
+      if (dateFrom) dateFrom.value = '';
+      if (dateTo) dateTo.value = '';
+    }
+    loadHistory(historySearch?.value || '');
+  });
+
+  // Dock/yard filter handlers
+  filterDock?.addEventListener('change', () => loadHistory(historySearch?.value || ''));
+  filterYard?.addEventListener('change', () => loadHistory(historySearch?.value || ''));
+
+  // User filter handler
+  filterUser?.addEventListener('change', () => loadHistory(historySearch?.value || ''));
 
   // Shipped orders search
   const shippedSearch = document.getElementById('shipped-search');
@@ -5745,6 +6104,121 @@ function setupModals() {
   document.getElementById('shipped-refresh')?.addEventListener('click', () => {
     loadShipped(shippedSearch?.value || '');
     showToast('Shipped list refreshed', 'success');
+  });
+
+  // Shipped date filters
+  const shippedDateFrom = document.getElementById('shipped-date-from');
+  const shippedDateTo = document.getElementById('shipped-date-to');
+  const shippedFilterUser = document.getElementById('shipped-filter-user');
+
+  shippedDateFrom?.addEventListener('change', () => loadShipped(shippedSearch?.value || ''));
+  shippedDateTo?.addEventListener('change', () => loadShipped(shippedSearch?.value || ''));
+  shippedFilterUser?.addEventListener('change', () => loadShipped(shippedSearch?.value || ''));
+
+  document.getElementById('shipped-date-clear')?.addEventListener('click', () => {
+    if (shippedDateFrom) shippedDateFrom.value = '';
+    if (shippedDateTo) shippedDateTo.value = '';
+    loadShipped(shippedSearch?.value || '');
+  });
+
+  // Export shipped trailers
+  document.getElementById('shipped-export')?.addEventListener('click', () => {
+    const dateFrom = shippedDateFrom?.value || '';
+    const dateTo = shippedDateTo?.value || '';
+    let url = '/api/archives/export?type=shipped';
+    if (dateFrom) url += `&dateFrom=${dateFrom}`;
+    if (dateTo) url += `&dateTo=${dateTo}`;
+
+    const token = localStorage.getItem('dockboard_token');
+    fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(res => {
+        if (!res.ok) throw new Error('Export failed');
+        return res.blob();
+      })
+      .then(blob => {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        const facilityId = authState.user?.currentFacility || authState.user?.homeFacility || 'unknown';
+        const dateLabel = dateFrom && dateTo ? `${dateFrom}-to-${dateTo}` : new Date().toISOString().split('T')[0];
+        a.download = `${facilityId}-shipped-trailers-${dateLabel}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+        showToast('Shipped trailers exported', 'success');
+      })
+      .catch(err => {
+        console.error('Export error:', err);
+        showToast('Failed to export shipped trailers', 'error');
+      });
+  });
+
+  // Received orders handlers
+  const receivedSearch = document.getElementById('received-search');
+  receivedSearch?.addEventListener('input', (e) => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => loadReceived(e.target.value), 300);
+  });
+
+  document.getElementById('received-clear')?.addEventListener('click', () => {
+    if (receivedSearch) {
+      receivedSearch.value = '';
+      loadReceived('');
+    }
+  });
+
+  document.getElementById('received-refresh')?.addEventListener('click', () => {
+    loadReceived(receivedSearch?.value || '');
+    showToast('Received list refreshed', 'success');
+  });
+
+  // Received date filters
+  const receivedDateFrom = document.getElementById('received-date-from');
+  const receivedDateTo = document.getElementById('received-date-to');
+  const receivedFilterUser = document.getElementById('received-filter-user');
+
+  receivedDateFrom?.addEventListener('change', () => loadReceived(receivedSearch?.value || ''));
+  receivedDateTo?.addEventListener('change', () => loadReceived(receivedSearch?.value || ''));
+  receivedFilterUser?.addEventListener('change', () => loadReceived(receivedSearch?.value || ''));
+
+  document.getElementById('received-date-clear')?.addEventListener('click', () => {
+    if (receivedDateFrom) receivedDateFrom.value = '';
+    if (receivedDateTo) receivedDateTo.value = '';
+    loadReceived(receivedSearch?.value || '');
+  });
+
+  // Export received trailers
+  document.getElementById('received-export')?.addEventListener('click', () => {
+    const dateFrom = receivedDateFrom?.value || '';
+    const dateTo = receivedDateTo?.value || '';
+    let url = '/api/archives/export?type=received';
+    if (dateFrom) url += `&dateFrom=${dateFrom}`;
+    if (dateTo) url += `&dateTo=${dateTo}`;
+
+    const token = localStorage.getItem('dockboard_token');
+    fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+      .then(res => {
+        if (!res.ok) throw new Error('Export failed');
+        return res.blob();
+      })
+      .then(blob => {
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        const facilityId = authState.user?.currentFacility || authState.user?.homeFacility || 'unknown';
+        const dateLabel = dateFrom && dateTo ? `${dateFrom}-to-${dateTo}` : new Date().toISOString().split('T')[0];
+        a.download = `${facilityId}-received-trailers-${dateLabel}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(downloadUrl);
+        showToast('Received trailers exported', 'success');
+      })
+      .catch(err => {
+        console.error('Export error:', err);
+        showToast('Failed to export received trailers', 'error');
+      });
   });
 
   // Carrier search
@@ -5787,6 +6261,9 @@ async function loadHistory(search = '', append = false) {
   const loadMoreBtn = document.getElementById('btn-load-more');
   const shownSpan = document.getElementById('history-shown');
   const totalSpan = document.getElementById('history-total');
+  const filterToday = document.getElementById('filter-today');
+  const dateFromInput = document.getElementById('history-date-from');
+  const dateToInput = document.getElementById('history-date-to');
 
   if (!list) return;
 
@@ -5797,14 +6274,74 @@ async function loadHistory(search = '', append = false) {
     list.innerHTML = '';
   }
 
+  // Handle "Today only" checkbox - set dates if checked and empty
+  if (filterToday?.checked && dateFromInput && !dateFromInput.value) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const localDate = `${yyyy}-${mm}-${dd}`;
+    dateFromInput.value = localDate;
+    dateToInput.value = localDate;
+  }
+
   try {
-    const dateFrom = document.getElementById('history-date-from')?.value;
-    const dateTo = document.getElementById('history-date-to')?.value;
+    const dateFrom = dateFromInput?.value;
+    const dateTo = dateToInput?.value;
 
     const data = await getHistory(search, HISTORY_PAGE_SIZE, historyOffset, dateFrom, dateTo);
-    historyTotal = data.total || data.entries.length;
+    let entries = data.entries || [];
 
-    if (data.entries.length === 0 && historyOffset === 0) {
+    // Get filter states
+    const showDock = document.getElementById('filter-dock')?.checked;
+    const showYard = document.getElementById('filter-yard')?.checked;
+    const selectedUser = document.getElementById('filter-user')?.value;
+
+    // Determine if we need to filter by location
+    const hasLocationFilter = showDock || showYard;
+    const showAllLocations = !hasLocationFilter || (showDock && showYard);
+
+    // Filter entries
+    if (!showAllLocations || selectedUser) {
+      entries = entries.filter(h => {
+        // User filter
+        if (selectedUser && h.username !== selectedUser) return false;
+
+        // Location filter
+        if (showAllLocations) return true;
+
+        const isDock = h.doorNumber || h.action?.includes('MOVED') || h.previousLocation?.includes('Door') || h.to?.includes('Door');
+        const isYard = h.yardSlotNumber || h.previousLocation?.includes('Yard') || h.to?.includes('Yard') || (!isDock && h.action !== 'TRAILER_SHIPPED' && h.action !== 'TRAILER_RECEIVED');
+
+        if (showDock && isDock) return true;
+        if (showYard && isYard) return true;
+        return false;
+      });
+    }
+
+    // Update total after filtering
+    historyTotal = entries.length;
+
+    // Populate user dropdown with unique users from entries
+    const filterUserSelect = document.getElementById('filter-user');
+    if (filterUserSelect && !append) {
+      const currentSelection = filterUserSelect.value;
+      const uniqueUsers = [...new Set(data.entries.filter(e => e.username).map(e => e.username))].sort();
+      const existingOptions = Array.from(filterUserSelect.options).map(o => o.value);
+      const newOptions = uniqueUsers.filter(u => !existingOptions.includes(u));
+
+      newOptions.forEach(username => {
+        const option = document.createElement('option');
+        option.value = username;
+        option.textContent = username;
+        filterUserSelect.appendChild(option);
+      });
+
+      // Restore selection if it still exists
+      if (currentSelection) filterUserSelect.value = currentSelection;
+    }
+
+    if (entries.length === 0 && historyOffset === 0) {
       if (emptyMsg) emptyMsg.classList.remove('hidden');
       if (loadMoreDiv) loadMoreDiv.classList.add('hidden');
       return;
@@ -5813,7 +6350,7 @@ async function loadHistory(search = '', append = false) {
     if (emptyMsg) emptyMsg.classList.add('hidden');
 
     // Render entries
-    const newEntries = data.entries.map(h => {
+    const newEntries = entries.map(h => {
       // Determine action styling and label
       let actionClass = 'updated';
       let actionLabel = 'Updated';
@@ -5824,6 +6361,7 @@ async function loadHistory(search = '', append = false) {
       else if (h.action === 'TRAILER_LOADED') { actionClass = 'loaded'; actionLabel = 'Loaded'; }
       else if (h.action === 'TRAILER_EMPTY') { actionClass = 'empty'; actionLabel = 'Empty'; }
       else if (h.action === 'TRAILER_SHIPPED') { actionClass = 'shipped'; actionLabel = 'Shipped'; }
+      else if (h.action === 'TRAILER_RECEIVED') { actionClass = 'received'; actionLabel = 'Received'; }
       else if (h.action === 'SHIPPED_DELETED') { actionClass = 'deleted'; actionLabel = 'Deleted Record'; }
 
       const carrier = h.carrier || (h.updates?.carrier);
@@ -5896,6 +6434,15 @@ async function loadHistory(search = '', append = false) {
                 <span class="history-location-from">${from}</span>
                 <span class="history-location-arrow">→</span>
                 <span class="history-location-to">Shipped 💨</span>
+            </div>
+          `;
+      } else if (h.action === 'TRAILER_RECEIVED') {
+          const from = h.from || atLocation || 'Dock';
+          locationHtml = `
+            <div class="history-location">
+                <span class="history-location-from">${from}</span>
+                <span class="history-location-arrow">→</span>
+                <span class="history-location-to">Received 📥</span>
             </div>
           `;
       }
@@ -5975,18 +6522,42 @@ async function loadShipped(search = '') {
   const list = document.getElementById('shipped-list');
   const emptyMsg = document.getElementById('shipped-empty');
   const countEl = document.getElementById('shipped-count');
+  const dateFromInput = document.getElementById('shipped-date-from');
+  const dateToInput = document.getElementById('shipped-date-to');
+  const filterUser = document.getElementById('shipped-filter-user');
   if (!list) return;
 
   try {
     // Fetch current state to get shippedTrailers
     await fetchState();
-    
+
     let shipped = state.shippedTrailers || [];
-    
+
+    // Get date filters
+    const dateFrom = dateFromInput?.value;
+    const dateTo = dateToInput?.value;
+    const selectedUser = filterUser?.value;
+
+    // Filter by date range
+    if (dateFrom || dateTo) {
+      shipped = shipped.filter(t => {
+        const shippedDate = new Date(t.shippedAt || t.updatedAt || t.createdAt);
+        const entryDate = shippedDate.toISOString().split('T')[0];
+        if (dateFrom && entryDate < dateFrom) return false;
+        if (dateTo && entryDate > dateTo) return false;
+        return true;
+      });
+    }
+
+    // Filter by user
+    if (selectedUser) {
+      shipped = shipped.filter(t => t.shippedBy === selectedUser);
+    }
+
     // Filter by search term
     if (search) {
       const term = search.toLowerCase();
-      shipped = shipped.filter(t => 
+      shipped = shipped.filter(t =>
         (t.number && t.number.toLowerCase().includes(term)) ||
         (t.carrier && t.carrier.toLowerCase().includes(term)) ||
         (t.customer && t.customer.toLowerCase().includes(term)) ||
@@ -5994,10 +6565,31 @@ async function loadShipped(search = '') {
         (t.doorNumber && t.doorNumber.toString().includes(term))
       );
     }
-    
+
+    // Populate user dropdown with unique shippedBy users
+    if (filterUser) {
+      const currentSelection = filterUser.value;
+      const uniqueUsers = [...new Set((state.shippedTrailers || [])
+        .filter(t => t.shippedBy)
+        .map(t => t.shippedBy))].sort();
+
+      // Clear existing options except "All users"
+      filterUser.innerHTML = '<option value="">All users</option>';
+
+      uniqueUsers.forEach(username => {
+        const option = document.createElement('option');
+        option.value = username;
+        option.textContent = username;
+        filterUser.appendChild(option);
+      });
+
+      // Restore selection if it still exists
+      if (currentSelection) filterUser.value = currentSelection;
+    }
+
     // Sort by shipped date (most recent first)
     shipped.sort((a, b) => new Date(b.shippedAt || b.updatedAt || b.createdAt) - new Date(a.shippedAt || a.updatedAt || a.createdAt));
-    
+
     if (countEl) countEl.textContent = `${shipped.length} shipped order${shipped.length !== 1 ? 's' : ''}`;
     
     if (shipped.length === 0) {
@@ -6067,6 +6659,150 @@ async function loadShipped(search = '') {
   } catch (error) {
     console.error('Shipped load error:', error);
     list.innerHTML = '<div class="shipped-empty">Failed to load shipped orders</div>';
+  }
+}
+
+// Load and display received trailers (inbound)
+async function loadReceived(search = '') {
+  const list = document.getElementById('received-list');
+  const emptyMsg = document.getElementById('received-empty');
+  const countEl = document.getElementById('received-count');
+  const dateFromInput = document.getElementById('received-date-from');
+  const dateToInput = document.getElementById('received-date-to');
+  const filterUser = document.getElementById('received-filter-user');
+  if (!list) return;
+
+  try {
+    // Fetch current state to get receivedTrailers
+    await fetchState();
+
+    let received = state.receivedTrailers || [];
+
+    // Get date filters
+    const dateFrom = dateFromInput?.value;
+    const dateTo = dateToInput?.value;
+    const selectedUser = filterUser?.value;
+
+    // Filter by date range
+    if (dateFrom || dateTo) {
+      received = received.filter(t => {
+        const receivedDate = new Date(t.receivedAt || t.updatedAt || t.createdAt);
+        const entryDate = receivedDate.toISOString().split('T')[0];
+        if (dateFrom && entryDate < dateFrom) return false;
+        if (dateTo && entryDate > dateTo) return false;
+        return true;
+      });
+    }
+
+    // Filter by user
+    if (selectedUser) {
+      received = received.filter(t => t.receivedBy === selectedUser);
+    }
+
+    // Filter by search term
+    if (search) {
+      const term = search.toLowerCase();
+      received = received.filter(t =>
+        (t.number && t.number.toLowerCase().includes(term)) ||
+        (t.carrier && t.carrier.toLowerCase().includes(term)) ||
+        (t.customer && t.customer.toLowerCase().includes(term)) ||
+        (t.loadNumber && t.loadNumber.toLowerCase().includes(term))
+      );
+    }
+
+    // Populate user dropdown with unique receivedBy users
+    if (filterUser) {
+      const currentSelection = filterUser.value;
+      const uniqueUsers = [...new Set((state.receivedTrailers || [])
+        .filter(t => t.receivedBy)
+        .map(t => t.receivedBy))].sort();
+
+      // Clear existing options except "All users"
+      filterUser.innerHTML = '<option value="">All users</option>';
+
+      uniqueUsers.forEach(username => {
+        const option = document.createElement('option');
+        option.value = username;
+        option.textContent = username;
+        filterUser.appendChild(option);
+      });
+
+      // Restore selection if it still exists
+      if (currentSelection) filterUser.value = currentSelection;
+    }
+
+    // Sort by received date (most recent first)
+    received.sort((a, b) => new Date(b.receivedAt || b.updatedAt || b.createdAt) - new Date(a.receivedAt || a.updatedAt || a.createdAt));
+
+    if (countEl) countEl.textContent = `${received.length} received order${received.length !== 1 ? 's' : ''}`;
+
+    if (received.length === 0) {
+      list.innerHTML = '';
+      if (emptyMsg) emptyMsg.classList.remove('hidden');
+      return;
+    }
+
+    if (emptyMsg) emptyMsg.classList.add('hidden');
+
+    list.innerHTML = received.map(t => {
+      const receivedDate = new Date(t.receivedAt || t.updatedAt || t.createdAt).toLocaleDateString();
+      const receivedTime = new Date(t.receivedAt || t.updatedAt || t.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+      return `
+        <div class="shipped-item" data-trailer-id="${t.id}">
+          <div class="shipped-item-header">
+            <span class="shipped-carrier">${t.carrier ? t.carrier : 'Unknown'}</span>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              ${editMode ? `<button class="btn-delete-shipped" data-received-id="${t.id}" title="Delete received record">🗑️</button>` : ''}
+              <span class="received-status">RECEIVED</span>
+              <span class="shipped-date">${receivedDate} ${receivedTime}</span>
+              ${t.receivedBy ? `<span class="shipped-by" title="Received by">👤 ${t.receivedBy}</span>` : ''}
+            </div>
+          </div>
+          <div class="shipped-details">
+            ${t.number ? `<div class="shipped-detail"><span class="shipped-detail-label">Trailer:</span> ${t.number}</div>` : ''}
+            ${t.customer ? `<div class="shipped-detail"><span class="shipped-detail-label">Customer:</span> ${t.customer}</div>` : ''}
+            ${t.loadNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Load:</span> ${t.loadNumber}</div>` : ''}
+            ${t.doorNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Door:</span> ${t.doorNumber}</div>` : ''}
+            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Contents:</span> ${t.contents}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Add double-click handlers to view trailer details (read-only)
+    list.querySelectorAll('.shipped-item').forEach(item => {
+      item.addEventListener('dblclick', () => {
+        const trailerId = item.dataset.trailerId;
+        if (trailerId) openTrailerEditModal(trailerId);
+      });
+    });
+
+    // Add delete handlers for received items (edit mode only)
+    list.querySelectorAll('.btn-delete-shipped').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const trailerId = btn.dataset.receivedId;
+        if (!trailerId) return;
+
+        const received = state.receivedTrailers?.find(t => t.id === trailerId);
+        if (!received) return;
+
+        if (!await showConfirmModal({ title: 'Delete Received Order', html: `<div style="text-align: center;"><p style="color: var(--text-secondary); margin: 0 0 0.5rem 0;">Delete received order for <strong>${received.carrier}</strong>?</p>${received.number ? `<p style="color: var(--text-muted); margin: 0; font-size: 0.875rem;">Trailer: ${received.number}</p>` : ''}</div>`, type: 'danger', confirmText: 'Delete', cancelText: 'Cancel' })) return;
+
+        try {
+          await apiCall(`/received/${trailerId}`, 'DELETE');
+          showToast('Received record deleted', 'success');
+          loadReceived(search);
+        } catch (err) {
+          showToast(err.message || 'Failed to delete received record', 'error');
+        }
+      });
+    });
+
+  } catch (error) {
+    console.error('Received load error:', error);
+    list.innerHTML = '<div class="shipped-empty">Failed to load received orders</div>';
   }
 }
 
@@ -6972,6 +7708,7 @@ function openTrailerEditModal(trailerId) {
   const trailer = state.trailers.find(t => t.id === trailerId) ||
                   state.yardTrailers.find(t => t.id === trailerId) ||
                   state.shippedTrailers?.find(t => t.id === trailerId) ||
+                  state.receivedTrailers?.find(t => t.id === trailerId) ||
                   (state.staging?.id === trailerId ? state.staging : null) ||
                   state.queuedTrailers?.find(t => t.id === trailerId) ||
                   state.appointmentQueue?.find(t => t.id === trailerId);
@@ -7000,14 +7737,18 @@ function openTrailerEditModal(trailerId) {
   modal.className = 'modal active';
   modal.id = 'modal-trailer-edit';
   const isShipped = trailer.location === 'shipped';
-  const isUnassignedYard = !trailer.doorNumber && !trailer.yardSlotNumber && !inStaging && !inQueue && !inAppt && trailer.location !== 'shipped';
+  const isReceived = trailer.location === 'received';
+  const isArchived = isShipped || isReceived;
+  const isInbound = trailer.direction === 'inbound';
+  const isUnassignedYard = !trailer.doorNumber && !trailer.yardSlotNumber && !inStaging && !inQueue && !inAppt && !isArchived;
   const isStagingOccupied = state.staging !== null;
-  
+
   modal.innerHTML = `
-    <div class="modal-content modal-large" style="position:relative;${isShipped ? ' overflow:hidden;' : ''}">
+    <div class="modal-content modal-large" style="position:relative;${isArchived ? ' overflow:hidden;' : ''}">
       ${isShipped ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-15deg);font-size:4rem;font-weight:900;color:rgba(239,68,68,0.3);pointer-events:none;z-index:100;border:4px solid rgba(239,68,68,0.3);padding:0.5rem 1rem;border-radius:8px;letter-spacing:0.2em;">SHIPPED</div>` : ''}
+      ${isReceived ? `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-15deg);font-size:4rem;font-weight:900;color:rgba(59,130,246,0.3);pointer-events:none;z-index:100;border:4px solid rgba(59,130,246,0.3);padding:0.5rem 1rem;border-radius:8px;letter-spacing:0.2em;">RECEIVED</div>` : ''}
       <div class="modal-header">
-        <h3>${isShipped ? '📦 SHIPPED Trailer (Read-Only)' : '🚛 Edit Trailer'}</h3>
+        <h3>${isShipped ? '📦 SHIPPED Trailer (Read-Only)' : isReceived ? '📥 RECEIVED Trailer (Read-Only)' : '🚛 Edit Trailer'}</h3>
         <button class="close-modal">×</button>
       </div>
       <div class="trailer-edit-preview">
@@ -7025,22 +7766,35 @@ function openTrailerEditModal(trailerId) {
               <label>Customer</label>
               <input type="text" id="edit-trailer-customer" value="${trailer.customer || ''}" placeholder="Customer name (optional)"${isShipped ? ' disabled="disabled"' : ''}>
             </div>
-            <div class="form-group carrier-autocomplete${isShipped ? ' disabled-field' : ''}">
+            <div class="form-group carrier-autocomplete${isArchived ? ' disabled-field' : ''}">
               <label>Carrier</label>
-              <input type="text" id="edit-trailer-carrier" value="${trailer.carrier}" autocomplete="off"${isShipped ? ' disabled="disabled"' : ''}>
+              <input type="text" id="edit-trailer-carrier" value="${trailer.carrier}" autocomplete="off"${isArchived ? ' disabled="disabled"' : ''}>
               <div id="edit-carrier-suggestions" class="autocomplete-list"></div>
             </div>
-            <div class="form-group${isShipped ? ' disabled-field' : ''}">
-              <label>Status</label>
-              <select id="edit-trailer-status"${isShipped ? ' disabled="disabled"' : ''}>
-                <option value="loaded" ${trailer.status === 'loaded' ? 'selected' : ''}>📦 Loaded</option>
-                <option value="empty" ${trailer.status === 'empty' ? 'selected' : ''}>📭 Empty</option>
-              </select>
+            <div class="form-row">
+              <div class="form-group half${isArchived ? ' disabled-field' : ''}">
+                <label class="switch-container">
+                  <div class="switch">
+                    <input type="checkbox" id="edit-trailer-direction" ${isInbound ? 'checked' : ''} ${isArchived ? 'disabled' : ''}>
+                    <span class="slider"></span>
+                  </div>
+                  <span class="switch-label"><span id="edit-direction-label">${isInbound ? '⬇️ Inbound' : '⬆️ Outbound'}</span></span>
+                </label>
+              </div>
+              <div class="form-group half${isArchived ? ' disabled-field' : ''}">
+                <label class="switch-container">
+                  <div class="switch">
+                    <input type="checkbox" id="edit-trailer-status" ${trailer.status === 'loaded' ? 'checked' : ''} ${isArchived ? 'disabled' : ''}>
+                    <span class="slider"></span>
+                  </div>
+                  <span class="switch-label"><span id="edit-status-label">${trailer.status === 'loaded' ? '📦 Loaded' : '📭 Empty'}</span></span>
+                </label>
+              </div>
             </div>
-            <div class="form-group${isShipped ? ' disabled-field' : ''}">
+            <div class="form-group${isArchived ? ' disabled-field' : ''}">
               <label class="switch-container">
                 <div class="switch">
-                  <input type="checkbox" id="edit-trailer-live" ${trailer.isLive ? 'checked' : ''} ${isShipped ? 'disabled' : ''}>
+                  <input type="checkbox" id="edit-trailer-live" ${trailer.isLive ? 'checked' : ''} ${isArchived ? 'disabled' : ''}>
                   <span class="slider"></span>
                 </div>
                 <span class="switch-label">LIVE LOAD/UNLOAD</span>
@@ -7084,9 +7838,10 @@ function openTrailerEditModal(trailerId) {
           </div>
         </div>
         <div class="modal-actions">
-          ${!isShipped ? `<button id="btn-save-trailer" class="btn btn-primary">💾 Save Changes</button>` : ''}
-          ${!isShipped ? `<button id="btn-ship-trailer" class="btn btn-warning">📦 Mark as Shipped</button>` : ''}
-          ${!isShipped && isUnassignedYard ? `<button id="btn-move-to-staging" class="btn btn-success" ${isStagingOccupied ? 'disabled' : ''}>⭐ Move to Staging</button>` : ''}
+          ${!isArchived ? `<button id="btn-save-trailer" class="btn btn-primary">💾 Save Changes</button>` : ''}
+          ${!isArchived ? `<button id="btn-ship-trailer" class="btn btn-warning" style="${isInbound ? 'display:none;' : ''}">📦 Mark as Shipped</button>` : ''}
+          ${!isArchived ? `<button id="btn-receive-trailer" class="btn btn-warning" style="${!isInbound ? 'display:none;' : ''}">📥 Mark as Received</button>` : ''}
+          ${!isArchived && isUnassignedYard ? `<button id="btn-move-to-staging" class="btn btn-success" ${isStagingOccupied ? 'disabled' : ''}>⭐ Move to Staging</button>` : ''}
           <button id="btn-delete-trailer-edit" class="btn btn-danger">🗑️ Delete Trailer</button>
           <button class="btn btn-secondary close-modal">Close</button>
         </div>
@@ -7099,6 +7854,14 @@ function openTrailerEditModal(trailerId) {
   // Load timeline
   loadTrailerTimeline(trailerId);
   
+  // Initialize inbound styling on toggles if trailer is inbound
+  if (isInbound) {
+    const directionToggle = document.getElementById('edit-trailer-direction');
+    const statusToggle = document.getElementById('edit-trailer-status');
+    directionToggle?.closest('.switch-container')?.classList.add('inbound-toggle');
+    statusToggle?.closest('.switch-container')?.classList.add('inbound-toggle');
+  }
+
   // Setup sanitization on all text inputs
   setupInputSanitization(document.getElementById('edit-trailer-customer'));
   setupInputSanitization(document.getElementById('edit-trailer-carrier'));
@@ -7107,7 +7870,7 @@ function openTrailerEditModal(trailerId) {
   setupInputSanitization(document.getElementById('edit-trailer-drivername'));
   setupInputSanitization(document.getElementById('edit-trailer-phone'));
   setupInputSanitization(document.getElementById('edit-trailer-notes'));
-  
+
   // Phone formatting on input
   const phoneInput = document.getElementById('edit-trailer-phone');
   if (phoneInput) {
@@ -7140,11 +7903,58 @@ function openTrailerEditModal(trailerId) {
     }
   });
 
+  // Toggle label updates for edit modal
+  document.getElementById('edit-trailer-direction')?.addEventListener('change', (e) => {
+    const label = document.getElementById('edit-direction-label');
+    const toggle = e.target;
+    const isInbound = toggle.checked;
+
+    if (label) label.textContent = isInbound ? '⬇️ Inbound' : '⬆️ Outbound';
+
+    // Add/remove blue styling for direction toggle
+    if (isInbound) {
+      toggle.closest('.switch-container')?.classList.add('inbound-toggle');
+    } else {
+      toggle.closest('.switch-container')?.classList.remove('inbound-toggle');
+    }
+
+    // Cascade blue styling to status toggle
+    const statusToggle = document.getElementById('edit-trailer-status');
+    if (statusToggle) {
+      if (isInbound) {
+        statusToggle.closest('.switch-container')?.classList.add('inbound-toggle');
+      } else {
+        statusToggle.closest('.switch-container')?.classList.remove('inbound-toggle');
+      }
+    }
+
+    // Live update the ship/receive button visibility
+    const shipBtn = document.getElementById('btn-ship-trailer');
+    const receiveBtn = document.getElementById('btn-receive-trailer');
+    if (shipBtn && receiveBtn) {
+      if (isInbound) {
+        shipBtn.style.display = 'none';
+        receiveBtn.style.display = '';
+      } else {
+        shipBtn.style.display = '';
+        receiveBtn.style.display = 'none';
+      }
+    }
+  });
+  document.getElementById('edit-trailer-status')?.addEventListener('change', (e) => {
+    const label = document.getElementById('edit-status-label');
+    if (label) label.textContent = e.target.checked ? '📦 Loaded' : '📭 Empty';
+  });
+
   // Save handler - only send changed fields
   document.getElementById('btn-save-trailer')?.addEventListener('click', async () => {
+    const directionChecked = document.getElementById('edit-trailer-direction')?.checked || false;
+    const statusChecked = document.getElementById('edit-trailer-status')?.checked || false;
+
     const newValues = {
       carrier: document.getElementById('edit-trailer-carrier')?.value?.trim(),
-      status: document.getElementById('edit-trailer-status')?.value,
+      direction: directionChecked ? 'inbound' : 'outbound',
+      status: statusChecked ? 'loaded' : 'empty',
       contents: document.getElementById('edit-trailer-notes')?.value?.trim() || null,
       customer: document.getElementById('edit-trailer-customer')?.value?.trim() || null,
       driverName: document.getElementById('edit-trailer-drivername')?.value?.trim() || null,
@@ -7154,12 +7964,13 @@ function openTrailerEditModal(trailerId) {
       number: document.getElementById('edit-trailer-number')?.value?.trim()  || null,
       isLive: document.getElementById('edit-trailer-live')?.checked || false
     };
-    
+
     // Only include fields that actually changed
     const updates = {};
-    
+
     // Compare each field with original (same pattern for all optional fields)
     if (newValues.carrier !== trailer.carrier) updates.carrier = newValues.carrier;
+    if (newValues.direction !== trailer.direction) updates.direction = newValues.direction;
     if (newValues.status !== trailer.status) updates.status = newValues.status;
     if (newValues.isLive !== (trailer.isLive || false)) updates.isLive = newValues.isLive;
     if (newValues.contents !== (trailer.contents || null)) updates.contents = newValues.contents;
@@ -7169,12 +7980,12 @@ function openTrailerEditModal(trailerId) {
     if (newValues.appointmentTime !== (trailer.appointmentTime || null)) updates.appointmentTime = newValues.appointmentTime;
     if (newValues.loadNumber !== (trailer.loadNumber || null)) updates.loadNumber = newValues.loadNumber;
     if (newValues.number !== (trailer.number || null)) updates.number = newValues.number;
-    
+
     if (Object.keys(updates).length === 0) {
       modal.remove();
       return;
     }
-    
+
     try {
       await updateTrailer(trailerId, updates);
       showToast('Trailer updated!', 'success');
@@ -7212,6 +8023,21 @@ function openTrailerEditModal(trailerId) {
     try {
       await shipTrailer(trailerId);
       showToast('Trailer marked as shipped', 'success');
+      modal.remove();
+      fetchState();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+
+  // Receive trailer handler
+  document.getElementById('btn-receive-trailer')?.addEventListener('click', async () => {
+    if (!await showConfirmModal({ title: 'Receive Trailer', html: `<div style="text-align: left;"><p style="color: var(--text-secondary); margin: 0 0 0.75rem 0;">Mark trailer <strong>${trailer.number || trailer.carrier}</strong> as received?</p><ul style="margin: 0 0 1rem 0; padding-left: 1.25rem; color: var(--text-secondary); line-height: 1.6; font-size: 0.875rem;"><li>Removed from active view</li><li>Preserved in history</li><li>Searchable by number/load</li><li>Reusable if it returns</li></ul><p style="color: var(--text-muted); margin: 0; font-size: 0.875rem;">This action cannot be undone.</p></div>`, type: 'info', confirmText: 'Receive', cancelText: 'Cancel' })) {
+      return;
+    }
+    try {
+      await receiveTrailer(trailerId);
+      showToast('Trailer marked as received', 'success');
       modal.remove();
       fetchState();
     } catch (error) {
@@ -7966,7 +8792,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadHistory(currentHistorySearch, true); // Append = true
   });
   document.getElementById('btn-view-shipped')?.addEventListener('click', () => { openModal('modal-shipped'); loadShipped(); });
-  document.getElementById('btn-view-unassigned')?.addEventListener('click', () => { if (requireAuth()) { openModal('modal-unassigned'); loadUnassignedYard(); } });
+  document.getElementById('btn-view-received')?.addEventListener('click', () => { openModal('modal-received'); loadReceived(); });
+  document.getElementById('btn-view-unassigned')?.addEventListener('click', () => { if (requireAuth()) { openModal('modal-unassigned'); loadUnassignedYard(); setupUnassignedYardEvents(); } });
   document.getElementById('btn-analytics')?.addEventListener('click', () => { if (requireAuth()) showAnalyticsModal(); });
   document.getElementById('btn-manage-carriers')?.addEventListener('click', () => { if (requireAuth()) { openModal('modal-carriers'); renderCarriersList(); } });
   document.getElementById('btn-settings')?.addEventListener('click', () => { if (requireAuth()) openSettingsModal(); });

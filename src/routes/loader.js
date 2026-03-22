@@ -10,7 +10,7 @@ const express = require("express");
 const router = express.Router();
 const { requireAuth, requireRole } = require("../middleware");
 const { loadState, addHistoryEntry } = require("../state");
-const { broadcastStateChange } = require("../sse");
+const { broadcastStateChange, broadcastToast } = require("../sse");
 const { getAllUsers } = require("../users");
 
 /**
@@ -71,6 +71,7 @@ router.post("/door", requireAuth, requireLoader, (req, res) => {
       number: trailer.number,
       carrier: trailer.carrier,
       status: trailer.status, // 'loaded' or 'empty'
+      direction: trailer.direction || 'outbound', // 'inbound' or 'outbound'
       notes: trailer.contents, // Include contents as notes for loader display
     } : null,
   });
@@ -139,6 +140,17 @@ router.post("/status", requireAuth, requireLoader, (req, res) => {
     ...state.trailers[trailerIndex],
     doorNumber: door.number,
   }, facilityId);
+
+  // Broadcast toast notification to dockboard users
+  const direction = trailer.direction || 'outbound';
+  const statusIcon = status === 'loaded' ? '📦' : '📭';
+  broadcastToast(
+    'info',
+    `${statusIcon} ${loaderName} marked ${trailer.carrier} ${trailer.number || ''} as ${status.toUpperCase()} at Door ${door.number}`,
+    { loaderName, carrier: trailer.carrier, trailerNumber: trailer.number, doorNumber: door.number, status },
+    facilityId,
+    req.user.userId // Don't show to the tablet user
+  );
 
   res.json({
     success: true,

@@ -15,15 +15,21 @@ router.get("/", requireAuth, (req, res) => {
   const history = loadHistory(facilityId);
   let entries = history.entries;
 
-  // Date filtering
+  // Date filtering - handle timezone properly
   if (dateFrom || dateTo) {
-    const fromTime = dateFrom ? new Date(dateFrom).setHours(0, 0, 0, 0) : null;
-    const toTime = dateTo ? new Date(dateTo).setHours(23, 59, 59, 999) : null;
+    // Convert entry timestamp to YYYY-MM-DD in local timezone for comparison
+    const getEntryDate = (timestamp) => {
+      const d = new Date(timestamp);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
 
     entries = entries.filter((e) => {
-      const entryTime = new Date(e.timestamp).getTime();
-      if (fromTime && entryTime < fromTime) return false;
-      if (toTime && entryTime > toTime) return false;
+      const entryDate = getEntryDate(e.timestamp);
+      if (dateFrom && entryDate < dateFrom) return false;
+      if (dateTo && entryDate > dateTo) return false;
       return true;
     });
   }

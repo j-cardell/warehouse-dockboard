@@ -48,14 +48,31 @@ const DEFAULT_YARD_SLOT_COUNT = 30;
 
 function randomDate(daysBack = 30) {
   const date = new Date(NOW);
-  date.setDate(date.getDate() - Math.floor(Math.random() * daysBack));
-  date.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60), Math.floor(Math.random() * 60));
+  // Subtract random days, ensure at least 1 hour in the past
+  const daysToSubtract = Math.max(0, Math.floor(Math.random() * daysBack));
+  date.setDate(date.getDate() - daysToSubtract);
+  // If today, ensure time is in the past
+  if (daysToSubtract === 0) {
+    date.setHours(date.getHours() - 1, Math.floor(Math.random() * 60), Math.floor(Math.random() * 60));
+  } else {
+    date.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60), Math.floor(Math.random() * 60));
+  }
   return date.toISOString();
 }
 
 function dateDaysAgo(daysAgo, hour = 8, minute = 0) {
   const date = new Date(NOW);
   date.setDate(date.getDate() - daysAgo);
+  // Ensure we don't set a time in the future when daysAgo is 0
+  if (daysAgo === 0) {
+    const currentHour = NOW.getHours();
+    const currentMinute = NOW.getMinutes();
+    if (hour > currentHour || (hour === currentHour && minute > currentMinute)) {
+      // Use a time earlier today, subtracting hours from now
+      date.setHours(currentHour - 2, Math.floor(Math.random() * 60), 0, 0);
+      return date.toISOString();
+    }
+  }
   date.setHours(hour, minute, 0, 0);
   return date.toISOString();
 }
@@ -100,10 +117,16 @@ function generateCarriers() {
   return CARRIERS.map(name => ({ id: uuidv4(), name, favorite: Math.random() > 0.7, usageCount: 0, createdAt: dateDaysAgo(60) }));
 }
 
-function generateDoorTrailer(carrier, doorNumber, createdAt) {
+function generateDoorTrailer(carrier, doorNumber, createdAt, isInbound = false) {
+  const direction = isInbound ? 'inbound' : 'outbound';
+  const status = isInbound
+    ? (Math.random() > 0.3 ? 'loaded' : 'empty')  // Inbound: loaded or empty
+    : (Math.random() > 0.3 ? 'loaded' : 'empty'); // Outbound: loaded or empty
+
   return {
     id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
-    status: Math.random() > 0.3 ? 'loaded' : 'empty',
+    direction,
+    status,
     customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
     loadNumber: Math.random() > 0.5 ? 'LD' + (Math.floor(Math.random() * 9000000) + 1000000) : null,
     driverName: Math.random() > 0.3 ? 'Driver ' + Math.floor(Math.random() * 100) : null,
@@ -116,19 +139,38 @@ function generateDoorTrailer(carrier, doorNumber, createdAt) {
 }
 
 function generateShippedTrailer(carrier, doorCount, createdAt, shippedAt) {
+  const doorNumber = doorCount > 0 ? Math.floor(Math.random() * doorCount) + 1 : null;
   return {
     id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
+    direction: 'outbound',
     status: 'shipped', customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
     loadNumber: Math.random() > 0.5 ? 'LD' + (Math.floor(Math.random() * 9000000) + 1000000) : null,
     notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
     location: 'shipped', shippedAt,
-    previousLocation: doorCount > 0 ? 'Door ' + (Math.floor(Math.random() * doorCount) + 1) : 'Yard', createdAt
+    doorNumber: doorNumber,
+    previousLocation: doorNumber ? 'Door ' + doorNumber : 'Yard', createdAt
   };
 }
 
-function generateQueuedTrailer(carrier, targetDoorNumber, targetDoorId) {
+function generateReceivedTrailer(carrier, doorCount, createdAt, receivedAt) {
+  const doorNumber = doorCount > 0 ? Math.floor(Math.random() * doorCount) + 1 : null;
   return {
     id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
+    direction: 'inbound',
+    status: 'received',
+    customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
+    loadNumber: Math.random() > 0.5 ? 'LD' + (Math.floor(Math.random() * 9000000) + 1000000) : null,
+    notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
+    location: 'received', receivedAt,
+    doorNumber: doorNumber,
+    previousLocation: doorNumber ? 'Door ' + doorNumber : 'Yard', createdAt
+  };
+}
+
+function generateQueuedTrailer(carrier, targetDoorNumber, targetDoorId, isInbound = false) {
+  return {
+    id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
+    direction: isInbound ? 'inbound' : 'outbound',
     status: Math.random() > 0.3 ? 'loaded' : 'empty',
     customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
     notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
@@ -137,9 +179,10 @@ function generateQueuedTrailer(carrier, targetDoorNumber, targetDoorId) {
   };
 }
 
-function generateAppointmentTrailer(carrier) {
+function generateAppointmentTrailer(carrier, isInbound = false) {
   return {
     id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
+    direction: isInbound ? 'inbound' : 'outbound',
     status: Math.random() > 0.3 ? 'loaded' : 'empty',
     customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
     driverName: Math.random() > 0.3 ? 'Driver ' + Math.floor(Math.random() * 100) : null,
@@ -150,10 +193,11 @@ function generateAppointmentTrailer(carrier) {
   };
 }
 
-function generateYardTrailer(carrier, slotNumber = null) {
+function generateYardTrailer(carrier, slotNumber = null, isInbound = false) {
   const createdAt = randomDate(5);
   const trailer = {
     id: uuidv4(), number: 'TR' + (Math.floor(Math.random() * 900000) + 100000), carrier,
+    direction: isInbound ? 'inbound' : 'outbound',
     status: Math.random() > 0.3 ? 'loaded' : 'empty',
     customer: Math.random() > 0.5 ? randomItem(CUSTOMERS) : null,
     notes: Math.random() > 0.7 ? randomItem(NOTES) : null,
@@ -208,38 +252,62 @@ async function main() {
 
   if (USABLE_DOOR_COUNT === 0) { console.error('No usable doors found.'); process.exit(1); }
 
-  // Active trailers at doors
-  const activeCount = Math.min(USABLE_DOOR_COUNT, Math.floor(count * 0.5));
+  // Active trailers at doors (60% of total - increased from 50%)
+  const activeCount = Math.min(USABLE_DOOR_COUNT, Math.floor(count * 0.6));
+  const inboundRatio = 0.3; // 30% of trailers are inbound
   for (let i = 0; i < activeCount; i++) {
     let doorNum, door;
     do { door = randomItem(usableDoors); doorNum = door.number; } while (occupiedDoors.has(doorNum));
     occupiedDoors.add(doorNum);
     const carrier = randomItem(state.carriers).name;
+    const isInbound = Math.random() < inboundRatio;
     const daysAgo = Math.random() > 0.5 ? 0 : Math.floor(Math.random() * 2) + 1;
     const createdAt = dateDaysAgo(daysAgo, Math.floor(Math.random() * 14) + 6, Math.floor(Math.random() * 60));
-    const trailer = generateDoorTrailer(carrier, doorNum, createdAt);
+    const trailer = generateDoorTrailer(carrier, doorNum, createdAt, isInbound);
     state.trailers.push(trailer);
     const targetDoor = state.doors.find(d => d.number === doorNum);
     targetDoor.trailerId = trailer.id;
     targetDoor.status = trailer.status;
     historyEntries.push(
-      createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, timestamp: trailer.createdAt }),
-      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, driverName: trailer.driverName, loadNumber: trailer.loadNumber, doorNumber: doorNum, timestamp: new Date(new Date(trailer.createdAt).getTime() + 1000).toISOString() })
+      createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, direction: trailer.direction, timestamp: trailer.createdAt }),
+      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, driverName: trailer.driverName, loadNumber: trailer.loadNumber, doorNumber: doorNum, direction: trailer.direction, timestamp: new Date(new Date(trailer.createdAt).getTime() + 1000).toISOString() })
     );
   }
 
-  // Shipped trailers
-  const shippedCount = Math.floor(count * 0.2);
+  // Shipped trailers (outbound) - reduced to make room for received
+  const shippedCount = Math.floor(count * 0.15);
   for (let i = 0; i < shippedCount; i++) {
     const carrier = randomItem(state.carriers).name;
-    const createdAt = dateDaysAgo(Math.floor(Math.random() * 4) + 1, Math.floor(Math.random() * 8) + 6);
-    const shippedAt = dateDaysAgo(Math.random() > 0.6 ? 0 : Math.floor(Math.random() * 2) + 1, Math.floor(Math.random() * 12) + 8);
+    const daysAgoCreated = Math.floor(Math.random() * 4) + 1;
+    const createdAt = dateDaysAgo(daysAgoCreated, Math.floor(Math.random() * 8) + 6);
+    // shippedAt must be after createdAt, so use fewer days ago
+    const daysAgoShipped = Math.max(0, daysAgoCreated - Math.floor(Math.random() * 2) - 1);
+    const shippedAt = dateDaysAgo(daysAgoShipped, Math.floor(Math.random() * 12) + 8);
     const trailer = generateShippedTrailer(carrier, DOOR_COUNT, createdAt, shippedAt);
     state.shippedTrailers.push(trailer);
     historyEntries.push(
-      createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, timestamp: trailer.createdAt }),
-      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, driverName: trailer.driverName, loadNumber: trailer.loadNumber, doorNumber: trailer.previousLocation?.replace('Door ', '') || Math.floor(Math.random() * DOOR_COUNT) + 1, timestamp: new Date(new Date(trailer.createdAt).getTime() + 60000).toISOString() }),
-      createHistoryEntry('TRAILER_SHIPPED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, from: trailer.previousLocation, to: 'Shipped', timestamp: trailer.shippedAt })
+      createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, direction: trailer.direction, timestamp: trailer.createdAt }),
+      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, driverName: trailer.driverName, loadNumber: trailer.loadNumber, doorNumber: trailer.previousLocation?.replace('Door ', '') || Math.floor(Math.random() * DOOR_COUNT) + 1, direction: trailer.direction, timestamp: new Date(new Date(trailer.createdAt).getTime() + 60000).toISOString() }),
+      createHistoryEntry('TRAILER_SHIPPED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, from: trailer.previousLocation, to: 'Shipped', direction: trailer.direction, timestamp: trailer.shippedAt })
+    );
+  }
+
+  // Received trailers (inbound) - new archive for inbound
+  const receivedCount = Math.floor(count * 0.1);
+  for (let i = 0; i < receivedCount; i++) {
+    const carrier = randomItem(state.carriers).name;
+    const daysAgoCreated = Math.floor(Math.random() * 4) + 1;
+    const createdAt = dateDaysAgo(daysAgoCreated, Math.floor(Math.random() * 8) + 6);
+    // receivedAt must be after createdAt, so use fewer days ago
+    const daysAgoReceived = Math.max(0, daysAgoCreated - Math.floor(Math.random() * 2) - 1);
+    const receivedAt = dateDaysAgo(daysAgoReceived, Math.floor(Math.random() * 12) + 8);
+    const trailer = generateReceivedTrailer(carrier, DOOR_COUNT, createdAt, receivedAt);
+    state.receivedTrailers = state.receivedTrailers || [];
+    state.receivedTrailers.push(trailer);
+    historyEntries.push(
+      createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, direction: trailer.direction, timestamp: trailer.createdAt }),
+      createHistoryEntry('MOVED_TO_DOOR', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, driverName: trailer.driverName, loadNumber: trailer.loadNumber, doorNumber: trailer.previousLocation?.replace('Door ', '') || Math.floor(Math.random() * DOOR_COUNT) + 1, direction: trailer.direction, timestamp: new Date(new Date(trailer.createdAt).getTime() + 60000).toISOString() }),
+      createHistoryEntry('TRAILER_RECEIVED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, from: trailer.previousLocation, to: 'Received', direction: trailer.direction, timestamp: trailer.receivedAt })
     );
   }
 
@@ -280,48 +348,52 @@ async function main() {
 
   // Queued trailers
   const occupiedDoorNumbers = state.doors.filter(d => d.trailerId && d.type === 'normal').map(d => d.number);
-  const queuedCount = Math.min(Math.floor(count * 0.15), occupiedDoorNumbers.length);
+  const queuedCount = Math.min(Math.floor(count * 0.12), occupiedDoorNumbers.length);
   for (let i = 0; i < queuedCount; i++) {
     const carrier = randomItem(state.carriers).name;
+    const isInbound = Math.random() < inboundRatio;
     const targetDoorNumber = randomItem(occupiedDoorNumbers);
     const targetDoor = state.doors.find(d => d.number === targetDoorNumber);
     if (targetDoor) {
-      const trailer = generateQueuedTrailer(carrier, targetDoor.number, targetDoor.id);
+      const trailer = generateQueuedTrailer(carrier, targetDoor.number, targetDoor.id, isInbound);
       state.queuedTrailers.push(trailer);
-      historyEntries.push(createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, timestamp: trailer.createdAt }));
+      historyEntries.push(createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, customer: trailer.customer, direction: trailer.direction, timestamp: trailer.createdAt }));
     }
   }
 
   // Appointment trailers
-  const apptCount = Math.floor(count * 0.12);
+  const apptCount = Math.floor(count * 0.1);
   for (let i = 0; i < apptCount; i++) {
     const carrier = randomItem(state.carriers).name;
-    const trailer = generateAppointmentTrailer(carrier);
+    const isInbound = Math.random() < inboundRatio;
+    const trailer = generateAppointmentTrailer(carrier, isInbound);
     state.appointmentQueue.push(trailer);
-    historyEntries.push(createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, timestamp: trailer.createdAt }));
+    historyEntries.push(createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, direction: trailer.direction, timestamp: trailer.createdAt }));
   }
 
-  // Yard trailers
-  const totalYardCount = Math.floor(count * 0.25);
-  const maxSlotAssignments = Math.min(YARD_SLOT_COUNT, Math.floor(totalYardCount * 0.6));
+  // Yard trailers - reduced total, fewer unassigned
+  const totalYardCount = Math.floor(count * 0.12);  // Reduced from 25% to 12%
+  const maxSlotAssignments = Math.min(YARD_SLOT_COUNT, Math.floor(totalYardCount * 0.9));  // 90% in slots
   const assignedToSlotsCount = Math.min(maxSlotAssignments, Math.floor(YARD_SLOT_COUNT * 0.5));
   for (let i = 0; i < assignedToSlotsCount; i++) {
     let slotNum;
     do { slotNum = YARD_SLOT_COUNT > 0 ? Math.floor(Math.random() * YARD_SLOT_COUNT) + 1 : 1; } while (occupiedSlots.has(slotNum));
     occupiedSlots.add(slotNum);
     const carrier = randomItem(state.carriers).name;
-    const trailer = generateYardTrailer(carrier, slotNum);
+    const isInbound = Math.random() < inboundRatio;
+    const trailer = generateYardTrailer(carrier, slotNum, isInbound);
     state.yardTrailers.push(trailer);
     const slot = state.yardSlots.find(s => s.number === slotNum);
     if (slot) slot.trailerId = trailer.id;
-    historyEntries.push(createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, timestamp: trailer.createdAt }));
+    historyEntries.push(createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, direction: trailer.direction, timestamp: trailer.createdAt }));
   }
-  const unassignedCount = totalYardCount - assignedToSlotsCount;
+  const unassignedCount = totalYardCount - assignedToSlotsCount;  // Much fewer unassigned
   for (let i = 0; i < unassignedCount; i++) {
     const carrier = randomItem(state.carriers).name;
-    const trailer = generateYardTrailer(carrier, null);
+    const isInbound = Math.random() < inboundRatio;
+    const trailer = generateYardTrailer(carrier, null, isInbound);
     state.yardTrailers.push(trailer);
-    historyEntries.push(createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, timestamp: trailer.createdAt }));
+    historyEntries.push(createHistoryEntry('TRAILER_CREATED', { trailerId: trailer.id, trailerNumber: trailer.number, carrier: trailer.carrier, direction: trailer.direction, timestamp: trailer.createdAt }));
   }
 
   // Update carriers and save
@@ -338,6 +410,7 @@ async function main() {
   console.log('  - ' + state.queuedTrailers.length + ' in queue');
   console.log('  - ' + state.appointmentQueue.length + ' with appointments');
   console.log('  - ' + state.shippedTrailers.length + ' shipped');
+  console.log('  - ' + (state.receivedTrailers?.length || 0) + ' received');
   console.log('  - ' + state.carriers.length + ' carriers');
   console.log('  - ' + history.entries.length + ' history entries');
 }

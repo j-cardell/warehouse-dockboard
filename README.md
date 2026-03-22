@@ -31,6 +31,13 @@ A real-time dock management application for warehouses, distribution centers, an
 - **Facility Features** - Support for dumpsters and ramps as non-trailer locations
 - **Yard Organization** - Numbered yard slots with customizable ranges
 - **Trailer Tracking** - Real-time trailer status (empty, loaded) with LIVE load/unload indicator
+- **Inbound/Outbound Management** - Track both incoming and outgoing trailers with different workflows:
+  - **Outbound**: Empty → Loaded → Shipped (amber/green colors)
+  - **Inbound**: Loaded → Empty → Received (blue/light blue colors)
+- **Loader Tablet Interface** (WIP) - Simplified `/loader.html` interface for forklift operators:
+  - User/PIN-based facility selection via tablet role
+  - Quick status updates (Empty/Loaded/Shipped/Received)
+  - Visual color-coded status buttons matching dashboard
 - **Staging Area** - Single pre-door slot for trailers awaiting assignment
 - **Queue System** - FCFS queue for specific doors and appointment scheduling
 - **Movement History** - Complete audit trail with pagination and search
@@ -86,7 +93,9 @@ The application will be available at `http://localhost:3000`
 ### First Run
 
 1. **Login**: Use credentials from your `.env` file
-2. **Setup Wizard**: Configure your facility layout (doors, yard slots, dumpsters, ramps)
+2. **Setup Wizard**: Configure your facility:
+   - Set facility name and **timezone** (from dropdown - affects all timestamps)
+   - Configure doors, yard slots, dumpsters, ramps
 3. **Dashboard**: Start managing trailers
 
 ---
@@ -140,6 +149,7 @@ openssl rand -hex 32
 
 ```yaml
 environment:
+  - AUTH_USER=${AUTH_USER}
   - AUTH_PASS=${AUTH_PASS}
   - JWT_SECRET=${JWT_SECRET}
   - PORT=3456
@@ -183,12 +193,27 @@ The server will refuse to start if:
 - Toggle LIVE LOAD/UNLOAD status
 - Click "Save Changes" to apply edits
 
-**Shipping Trailers:**
+**Shipping Trailers (Outbound):**
 - Open the trailer edit modal (double-click)
 - Click "Mark as Shipped" button
 - Trailer moves to shipped archive and door becomes available
 
-### Staging Area vs Unassigned Yard
+**Receiving Trailers (Inbound):**
+- Open the trailer edit modal (double-click)
+- Click "Mark as Received" button
+- Trailer moves to received archive and door becomes available
+
+### Loader Tablet Interface (WIP)
+
+A simplified interface at `/loader.html` for forklift operators to quickly update trailer status without accessing the full dashboard.
+
+**Current Implementation:**
+1. **Create Tablet User** (Admin): In User Management, create a user with "tablet" role. Since this is WIP, use the facility ID as the username. Currently, this is how the facility is identified. Future state, create full Loader users with their own username and hashed password to log into the tablet with. This is set up as if each facility is using a shared device.
+2. **Create Loaders** (Admin): Create users with "loader" role - these only need names (no passwords) and appear in the loader selection list after logging in with the tablet user assigned to the facility. This populates the correct users per facility.
+3. **Access**: Loaders go to `/loader.html`, enter the tablet username to select the facility, enter the pin set by the creating admin, then select their name from the loader list.
+4. **Status Updates**: Loaders enter the door number, confirm the carrier/trailer number. The loader is then shown any notes added to the load. After dismissing the notes, they are displayed 3 buttons. Empty/Loaded and either Shipped (if an outbound load) or Received (if an inbound load). Any of the selections will update the door grid accordingly. It will mark a loaded trailer empty, an empty trailer loaded, mark a trailer as loaded and shipped, mark a trailer as empty and received. 
+
+**Note:** To repeat, this is currently designed for shared tablet scenarios. Future versions will support individual devices with distinct user credentials.
 
 **Staging Area** - Use this for trailers awaiting assignment:
 - Driver arrived but door isn't ready yet
@@ -283,55 +308,59 @@ Click "Edit" button to enable configuration changes:
 ```
 warehouse-dockboard/
 ├── src/
-│   ├── server.js          # Main entry point
-│   ├── config.js          # Environment variables and constants
-│   ├── state.js           # Data persistence (load/save JSON)
-│   ├── utils.js           # Helper functions (sanitize, uuid)
-│   ├── middleware.js      # Auth, rate limiting
-│   ├── analytics.js       # Dwell time calculations
-│   ├── sse.js             # Server-Sent Events handler
-│   ├── facilities.js      # Multi-facility management
-│   └── routes/            # API routes (modular)
-│       ├── auth.js        # Authentication endpoints
-│       ├── users.js       # User CRUD
-│       ├── user-settings.js # User preferences
-│       ├── setup.js       # First-run configuration
-│       ├── settings.js    # UI settings
-│       ├── archives.js    # Backup/restore
-│       ├── demo.js        # Demo data generation
-│       ├── state.js       # Current state endpoint
-│       ├── history.js     # Audit log
-│       ├── trailers.js    # Trailer CRUD
-│       ├── moves.js       # Movement operations
-│       ├── doors.js       # Door management
-│       ├── yard.js        # Yard slot management
-│       ├── queues.js      # FCFS and appointment queues
-│       ├── carriers.js    # Carrier registry
-│       ├── analytics.js   # Statistics endpoints
-│       └── facilities.js # Facility CRUD
-├── public/                 # Frontend files
-│   ├── index.html         # Main HTML template
-│   ├── app.js             # Frontend logic (~7,500 lines)
-│   ├── styles.css         # Main stylesheet
+│   ├── server.js               # Main entry point
+│   ├── config.js               # Environment variables and constants
+│   ├── state.js                # Data persistence (load/save JSON)
+│   ├── utils.js                # Helper functions (sanitize, uuid)
+│   ├── middleware.js           # Auth, rate limiting
+│   ├── analytics.js            # Dwell time calculations
+│   ├── sse.js                  # Server-Sent Events handler
+│   ├── facilities.js           # Multi-facility management
+│   └── routes/                 # API routes (modular)
+│       ├── auth.js             # Authentication endpoints
+│       ├── users.js            # User CRUD
+│       ├── user-settings.js    # User preferences
+│       ├── setup.js            # First-run configuration
+│       ├── settings.js         # UI settings
+│       ├── archives.js         # Backup/restore
+│       ├── demo.js             # Demo data generation
+│       ├── state.js            # Current state endpoint
+│       ├── history.js          # Audit log
+│       ├── trailers.js         # Trailer CRUD
+│       ├── moves.js            # Movement operations
+│       ├── doors.js            # Door management
+│       ├── yard.js             # Yard slot management
+│       ├── queues.js           # FCFS and appointment queues
+│       ├── carriers.js         # Carrier registry
+│       ├── analytics.js        # Statistics endpoints
+│       ├── facilities.js       # Facility CRUD
+│       ├── loader.js           # Loader tablet API
+│       └── events.js           # Server-Sent Events endpoint
+├── public/                     # Frontend files
+│   ├── index.html              # Main HTML template
+│   ├── loader.html             # Tablet interface for forklift operators
+│   ├── archives.html           # Archive management UI
+│   ├── app.js                  # Frontend logic (~7,500 lines)
+│   ├── styles.css              # Main stylesheet
 │   ├── carrier-summary.css
 │   ├── door-edit.css
 │   ├── auth.css
 │   └── time-picker.css
-├── data/                   # Runtime data storage
-│   ├── state.json
-│   ├── history.json
-│   ├── analytics.json
-│   ├── settings.json
-│   ├── users.json
-│   ├── facilities.json    # Multi-facility mode
-│   ├── archives/          # Point-in-time backups
-│   └── facilities/        # Per-facility data
+├── data/                       # Runtime data storage
+│   ├── state.json              # Current doors, trailers, yard, queues, carriers (single-facility mode)
+│   ├── history.json            # Audit log of all trailer movements and changes
+│   ├── analytics.json          # Daily dwell statistics and violation tracking
+│   ├── settings.json           # UI preferences (fonts, colors, display options)
+│   ├── users.json              # User accounts and credentials (single-facility mode)
+│   ├── facilities.json         # Facility definitions and configuration
+│   ├── archives/               # Point-in-time backups
+│   └── facilities/             # Per-facility data (multi-facility mode)
 │       └── {facilityId}/
-│           ├── state.json
-│           ├── history.json
-│           ├── analytics.json
-│           ├── settings.json
-│           └── users.json
+│           ├── state.json      # Current doors, trailers, yard, queues, carriers for this facility
+│           ├── history.json    # Audit log for this facility
+│           ├── analytics.json  # Statistics for this facility
+│           ├── settings.json   # UI preferences for this facility
+│           └── users.json      # User accounts for this facility
 ├── .env.example
 ├── docker-compose.yml
 ├── Dockerfile
@@ -410,6 +439,7 @@ The server is organized into modules:
   "number": "TR12345",
   "carrier": "FedEx",
   "status": "loaded",
+  "direction": "outbound",
   "customer": "Acme Corp",
   "loadNumber": "LD1234567",
   "driverName": "John Smith",
@@ -432,6 +462,10 @@ The server is organized into modules:
   ]
 }
 ```
+
+**Direction:** `outbound` (default) | `inbound`
+- **Outbound**: Empty → Loaded → Shipped (amber → green)
+- **Inbound**: Loaded → Empty → Received (blue → light blue)
 
 ### Yard Trailer (unassigned)
 
@@ -480,7 +514,7 @@ The server is organized into modules:
 }
 ```
 
-### Shipped Trailer (archived)
+### Shipped Trailer (archived - outbound)
 
 ```json
 {
@@ -490,6 +524,20 @@ The server is organized into modules:
   "status": "shipped",
   "shippedAt": "2026-01-01T18:00:00Z",
   "previousLocation": "Door 12",
+  "createdAt": "2026-01-01T00:00:00Z"
+}
+```
+
+### Received Trailer (archived - inbound)
+
+```json
+{
+  "id": "uuid",
+  "number": "TR44444",
+  "carrier": "Walmart",
+  "status": "received",
+  "receivedAt": "2026-01-01T18:00:00Z",
+  "previousLocation": "Door 8",
   "createdAt": "2026-01-01T00:00:00Z"
 }
 ```
@@ -627,8 +675,10 @@ Authorization: Bearer <jwt-token>
 - `POST /api/trailers` - Create trailer
 - `PUT /api/trailers/:id` - Update trailer
 - `DELETE /api/trailers/:id` - Delete trailer
-- `POST /api/trailers/:id/ship` - Ship trailer
+- `POST /api/trailers/:id/ship` - Ship outbound trailer
+- `POST /api/trailers/:id/receive` - Receive inbound trailer
 - `DELETE /api/shipped/:id` - Delete shipped trailer record
+- `DELETE /api/received/:id` - Delete received trailer record
 
 #### Movement
 - `POST /api/move-to-door` - Move trailer to door
@@ -678,10 +728,11 @@ Authorization: Bearer <jwt-token>
 - `POST /api/archives` - Create archive
 - `GET /api/archives/:filename` - Download archive
 - `POST /api/archives/restore` - Restore from archive
+- `GET /api/archives/export?type=shipped|received` - Export shipped or received trailers to Excel
 
 #### Analytics
 - `GET /api/analytics` - Get dwell statistics
-  - Query params: `period` (day/week/month), `facilities`
+  - Query params: `period` (day/week/month), `facilities`, `direction` (inbound/outbound/all)
 - `POST /api/analytics/snapshot` - Create analytics snapshot
 - `DELETE /api/analytics` - Clear analytics data
 - `GET /api/analytics/violations` - Get 2+ hour violations
@@ -775,11 +826,11 @@ curl http://localhost:3456/api/health
 ### Generate Demo Data
 
 ```bash
-# Generate 50 trailers with history
-node scripts/generate-demo-data.js 50
+# Generate trailers with history
+node scripts/generate-demo-data.js
 
 # Generate for specific facility
-node scripts/generate-demo-data.js 50 facility-id
+node scripts/generate-demo-data.js facility-id
 ```
 
 ### File Locations

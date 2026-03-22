@@ -347,6 +347,16 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
 }
 
+.yard-slot.occupied.inbound-loaded {
+    border-color: #3b82f6;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+}
+
+.yard-slot.occupied.inbound-empty {
+    border-color: #60a5fa;
+    box-shadow: 0 0 10px rgba(96, 165, 250, 0.2);
+}
+
 /* Filtering */
 .yard-slot.highlighted {
     box-shadow: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3) !important;
@@ -419,6 +429,16 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     background: rgba(245, 158, 11, 0.2);
 }
 
+.yard-slot-status.inbound-loaded {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.2);
+}
+
+.yard-slot-status.inbound-empty {
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.2);
+}
+
 .trailer-number-row {
     font-size: 0.75rem;
     color: var(--text-secondary);
@@ -478,6 +498,14 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 .yard-trailer:hover {
     box-shadow: var(--shadow-md);
     border-color: var(--accent-primary);
+}
+
+.yard-trailer.inbound-loaded {
+    border-color: #3b82f6;
+}
+
+.yard-trailer.inbound-empty {
+    border-color: #60a5fa;
 }
 
 .yard-trailer.dragging {
@@ -578,6 +606,16 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 .yard-status-badge.empty {
     color: #f59e0b;
     background: rgba(245, 158, 11, 0.2);
+}
+
+.yard-status-badge.inbound-loaded {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.2);
+}
+
+.yard-status-badge.inbound-empty {
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.2);
 }
 
 /* Unassigned Header */
@@ -721,6 +759,14 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     border-color: #f59e0b;
 }
 
+.dock-door.occupied.status-inbound-loaded {
+    border-color: #3b82f6;
+}
+
+.dock-door.occupied.status-inbound-empty {
+    border-color: #dbeafe;
+}
+
 .dock-door.occupied.status-unknown {
     border-color: #64748b;
 }
@@ -827,6 +873,16 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 .badge.empty {
     background: rgba(245, 158, 11, 0.2);
     color: #f59e0b;
+}
+
+.badge.inbound-loaded {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.badge.inbound-empty {
+    background: #eff6ff;
+    color: #3b82f6;
 }
 
 .door-content {
@@ -1329,6 +1385,43 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     color: var(--text-secondary);
 }
 
+.shipped-filters {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+}
+
+.shipped-filters label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.shipped-filters input[type="date"] {
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.shipped-filters select {
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    min-width: 120px;
+}
+
 .shipped-item {
     display: flex;
     flex-direction: column;
@@ -1416,6 +1509,16 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     font-weight: 700;
     padding: 0.15rem 0.4rem;
     background: #ef4444;
+    color: white;
+    border-radius: var(--radius-sm);
+    text-transform: uppercase;
+}
+
+.received-status {
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.15rem 0.4rem;
+    background: #3b82f6;
     color: white;
     border-radius: var(--radius-sm);
     text-transform: uppercase;
@@ -2143,6 +2246,14 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     font-weight: 600;
 }
 
+.quick-add-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
 .quick-add-toggle button {
     font-size: 1rem;
     padding: 0.75rem 1rem;
@@ -2489,6 +2600,10 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(4px);
 }
 
 .toast {
@@ -2649,7 +2764,8 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     border-radius: var(--radius-md);
     padding: 1rem;
     margin-bottom: 1.5rem;
-    min-height: 300px;
+    min-height: 200px;
+    max-height: 300px;
 }
 
 .analytics-chart-container canvas {
@@ -2901,6 +3017,7 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
 .history-action.loaded { color: #10b981; }
 .history-action.empty { color: #f59e0b; }
 .history-action.shipped { color: #8b5cf6; } /* Purple for shipped */
+.history-action.received { color: #3b82f6; } /* Blue for received */
 
 /* History - Dark bubble style */
 .history-description {
@@ -3095,6 +3212,17 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     cursor: pointer;
 }
 
+.history-filters select,
+.type-filters select {
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
 /* ============================================================================
    Door Edit Modal - Reworked
    ============================================================================ */
@@ -3283,7 +3411,16 @@ body:has(.edit-mode-active) .door-edit-btn {
 .analytics-violations {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
+}
+
+.violations-filters {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
 }
 
 .violations-header {
@@ -3313,8 +3450,9 @@ body:has(.edit-mode-active) .door-edit-btn {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    max-height: 300px;
+    max-height: 250px;
     overflow-y: auto;
+    margin-bottom: 1rem;
 }
 
 .violation-item {
@@ -4152,6 +4290,20 @@ input:checked + .slider:before {
     font-size: 0.875rem;
     color: #ef4444 !important; /* Forced Red */
     user-select: none;
+}
+
+/* Inbound toggle styling - blue color */
+.switch-container.inbound-toggle .switch-label {
+    color: #3b82f6 !important;
+}
+
+.switch-container.inbound-toggle input:checked + .slider {
+    background-color: rgba(59, 130, 246, 0.2);
+    border-color: #3b82f6;
+}
+
+.switch-container.inbound-toggle input:checked + .slider:before {
+    background-color: #3b82f6;
 }
 
 #appointment-queue-section {

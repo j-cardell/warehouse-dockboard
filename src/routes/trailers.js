@@ -27,7 +27,7 @@ const { requireAuth, requireRole } = require("../middleware");
 const { loadState, saveState, addHistoryEntry } = require("../state");
 const { sanitizeInput } = require("../utils");
 const { resetDwellTime } = require("../analytics");
-const { broadcastStateChange } = require("../sse");
+const { broadcastStateChange, broadcastToast } = require("../sse");
 
 /**
  * POST /api/trailers
@@ -54,12 +54,13 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
     number,
     carrier,
     carrierId,
-    status = "empty",
+    status,
     contents = "",
     loadNumber,
     customer,
     driverName,
     isLive,
+    direction = "outbound",
   } = req.body;
 
   if (!carrier) {
@@ -83,12 +84,16 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
     }
   }
 
+  // Default status based on direction: inbound starts loaded, outbound starts empty
+  const trailerStatus = status || (direction === 'inbound' ? 'loaded' : 'empty');
+
   const trailer = {
     id: uuidv4(),
     number: trailerNumber,
     carrier: safeCarrier,
     carrierId: carrierId || null,
-    status,
+    status: trailerStatus,
+    direction: direction === 'inbound' ? 'inbound' : 'outbound',
     contents: contents ? sanitizeInput(contents) : null,
     loadNumber: loadNumber ? sanitizeInput(loadNumber) : null,
     customer: customer ? sanitizeInput(customer) : null,
@@ -181,6 +186,12 @@ router.put("/:id", requireAuth, requireRole("user"), (req, res) => {
     oldValues.status = trailer.status;
     trailer.status = updates.status;
     changes.push({ field: "status", from: oldValues.status, to: trailer.status });
+  }
+
+  if (updates.direction && updates.direction !== trailer.direction) {
+    oldValues.direction = trailer.direction;
+    trailer.direction = updates.direction;
+    changes.push({ field: "direction", from: oldValues.direction, to: trailer.direction });
   }
 
   if (updates.isLive !== undefined && updates.isLive !== trailer.isLive) {
@@ -454,6 +465,9 @@ router.delete("/:id", requireAuth, requireRole("user"), (req, res) => {
 router.post("/:id/ship", requireAuth, requireRole("user"), (req, res) => {
   const facilityId = req.user.currentFacility || req.user.homeFacility;
   const { id } = req.params;
+  const { loaderName: selectedLoaderName } = req.body;
+  // Use selected loader name if provided (from tablet), otherwise use authenticated user
+  const loaderName = selectedLoaderName || req.user.username;
   const state = loadState(facilityId);
 
   // Find trailer in docked or yard
@@ -491,6 +505,20 @@ router.post("/:id/ship", requireAuth, requireRole("user"), (req, res) => {
     return res.status(404).json({ error: "Trailer not found" });
   }
 
+  // Ensure proper sequence: outbound trailers should be loaded before shipped
+  if (trailer.status === 'empty') {
+    trailer.status = 'loaded';
+    addHistoryEntry("TRAILER_LOADED", {
+      trailerId: trailer.id,
+      trailerNumber: trailer.number,
+      carrier: trailer.carrier,
+      loadNumber: trailer.loadNumber,
+      customer: trailer.customer,
+      location: sourceLocation,
+      note: "Auto-marked loaded before ship",
+    }, { userId: req.user.userId, username: loaderName }, facilityId);
+  }
+
   // Clear door/yard slot associations
   let clearedDoorId = null;
   let clearedDoorNumber = null;
@@ -511,12 +539,13 @@ router.post("/:id/ship", requireAuth, requireRole("user"), (req, res) => {
     }
   }
 
-  // Archive trailer
+  // Archive trailer - preserve door number before clearing
   trailer.location = "shipped";
   trailer.shippedAt = new Date().toISOString();
-  trailer.shippedBy = req.user?.username || 'Unknown';
+  trailer.shippedBy = loaderName;
+  // Preserve door number for reporting (clearedDoorNumber captured earlier)
+  trailer.doorNumber = clearedDoorNumber || trailer.doorNumber;
   trailer.doorId = null;
-  trailer.doorNumber = null;
   trailer.yardSlotId = null;
   trailer.yardSlotNumber = null;
   trailer.previousLocation = sourceLocation;
@@ -562,6 +591,15 @@ router.post("/:id/ship", requireAuth, requireRole("user"), (req, res) => {
   // Broadcast ship event to all clients
   broadcastStateChange("trailer", "ship", { trailerId: id, trailer, autoAssigned }, facilityId);
 
+  // Broadcast toast notification
+  broadcastToast(
+    'success',
+    `🚚 ${loaderName} shipped ${trailer.carrier} ${trailer.number || ''} from ${sourceLocation}`,
+    { loaderName, carrier: trailer.carrier, trailerNumber: trailer.number, sourceLocation, action: 'shipped' },
+    facilityId,
+    req.user.userId
+  );
+
   addHistoryEntry("TRAILER_SHIPPED", {
     trailerId: trailer.id,
     trailerNumber: trailer.number,
@@ -574,9 +612,172 @@ router.post("/:id/ship", requireAuth, requireRole("user"), (req, res) => {
       autoAssignedToDoor: autoAssigned.doorNumber,
       autoAssignedCarrier: autoAssigned.carrier,
     }),
-  }, req.user);
+  }, { userId: req.user.userId, username: loaderName }, facilityId);
 
   res.json({ success: true, trailer, message: "Trailer marked as shipped", autoAssigned });
+});
+
+/**
+ * POST /api/trailers/:id/receive
+ * Mark trailer as received (soft delete/archive for inbound trailers).
+ *
+ * Moves trailer from active to receivedTrailers array.
+ * Preserves all trailer data including location history.
+ * Triggers auto-assignment if a door is cleared.
+ */
+router.post("/:id/receive", requireAuth, requireRole("user"), (req, res) => {
+  const facilityId = req.user.currentFacility || req.user.homeFacility;
+  const { id } = req.params;
+  const { loaderName: selectedLoaderName } = req.body;
+  // Use selected loader name if provided (from tablet), otherwise use authenticated user
+  const loaderName = selectedLoaderName || req.user.username;
+  const state = loadState(facilityId);
+
+  // Find trailer in docked or yard
+  let trailerIndex = state.trailers.findIndex((t) => t.id === id);
+  let trailer = null;
+  let sourceLocation = null;
+
+  if (trailerIndex >= 0) {
+    trailer = state.trailers[trailerIndex];
+    sourceLocation = trailer.doorNumber
+      ? `Door ${trailer.doorNumber}`
+      : trailer.yardSlotNumber
+        ? `Yard Spot ${trailer.yardSlotNumber}`
+        : "Unassigned Yard";
+    state.trailers.splice(trailerIndex, 1);
+  } else {
+    trailerIndex = state.yardTrailers.findIndex((t) => t.id === id);
+    if (trailerIndex >= 0) {
+      trailer = state.yardTrailers[trailerIndex];
+      sourceLocation = trailer.yardSlotNumber
+        ? `Yard Spot ${trailer.yardSlotNumber}`
+        : "Unassigned Yard";
+      state.yardTrailers.splice(trailerIndex, 1);
+    }
+  }
+
+  // Check staging
+  if (!trailer && state.staging?.id === id) {
+    trailer = state.staging;
+    sourceLocation = "Staging";
+    state.staging = null;
+  }
+
+  if (!trailer) {
+    return res.status(404).json({ error: "Trailer not found" });
+  }
+
+  // Ensure proper sequence: inbound trailers should be emptied before received
+  if (trailer.status === 'loaded') {
+    trailer.status = 'empty';
+    addHistoryEntry("TRAILER_EMPTY", {
+      trailerId: trailer.id,
+      trailerNumber: trailer.number,
+      carrier: trailer.carrier,
+      loadNumber: trailer.loadNumber,
+      customer: trailer.customer,
+      location: sourceLocation,
+      note: "Auto-marked empty before receive",
+    }, { userId: req.user.userId, username: loaderName }, facilityId);
+  }
+
+  // Clear door/yard slot associations
+  let clearedDoorId = null;
+  let clearedDoorNumber = null;
+
+  if (trailer.doorId) {
+    const door = state.doors.find((d) => d.id === trailer.doorId);
+    if (door) {
+      clearedDoorId = trailer.doorId;
+      clearedDoorNumber = trailer.doorNumber;
+      door.trailerId = null;
+      door.status = "empty";
+    }
+  }
+  if (trailer.yardSlotId) {
+    const slot = state.yardSlots.find((s) => s.id === trailer.yardSlotId);
+    if (slot) {
+      slot.trailerId = null;
+    }
+  }
+
+  // Archive trailer - preserve door number before clearing
+  trailer.location = "received";
+  trailer.receivedAt = new Date().toISOString();
+  trailer.receivedBy = loaderName;
+  // Preserve door number for reporting (clearedDoorNumber captured earlier)
+  trailer.doorNumber = clearedDoorNumber || trailer.doorNumber;
+  trailer.doorId = null;
+  trailer.yardSlotId = null;
+  trailer.yardSlotNumber = null;
+  trailer.previousLocation = sourceLocation;
+
+  if (!state.receivedTrailers) state.receivedTrailers = [];
+  state.receivedTrailers.push(trailer);
+
+  // Auto-assign from queue
+  let autoAssigned = null;
+  if (clearedDoorId) {
+    const queuedForDoor = state.queuedTrailers?.filter(
+      (t) => t.targetDoorId === clearedDoorId,
+    );
+    if (queuedForDoor && queuedForDoor.length > 0) {
+      const nextTrailer = queuedForDoor[0];
+      state.queuedTrailers = state.queuedTrailers.filter(
+        (t) => t.id !== nextTrailer.id,
+      );
+
+      const door = state.doors.find((d) => d.id === clearedDoorId);
+      if (door) {
+        door.trailerId = nextTrailer.id;
+        door.status = nextTrailer.status || "occupied";
+      }
+
+      nextTrailer.doorId = clearedDoorId;
+      nextTrailer.doorNumber = clearedDoorNumber;
+      nextTrailer.location = "door";
+      delete nextTrailer.targetDoorId;
+      delete nextTrailer.targetDoorNumber;
+      state.trailers.push(nextTrailer);
+
+      autoAssigned = {
+        trailerId: nextTrailer.id,
+        carrier: nextTrailer.carrier,
+        doorNumber: clearedDoorNumber,
+      };
+    }
+  }
+
+  saveState(state, facilityId);
+
+  // Broadcast receive event to all clients
+  broadcastStateChange("trailer", "receive", { trailerId: id, trailer, autoAssigned }, facilityId);
+
+  // Broadcast toast notification
+  broadcastToast(
+    'success',
+    `✅ ${loaderName} received ${trailer.carrier} ${trailer.number || ''} from ${sourceLocation}`,
+    { loaderName, carrier: trailer.carrier, trailerNumber: trailer.number, sourceLocation, action: 'received' },
+    facilityId,
+    req.user.userId
+  );
+
+  addHistoryEntry("TRAILER_RECEIVED", {
+    trailerId: trailer.id,
+    trailerNumber: trailer.number,
+    carrier: trailer.carrier,
+    loadNumber: trailer.loadNumber,
+    customer: trailer.customer,
+    from: sourceLocation,
+    to: "Received",
+    ...(autoAssigned && {
+      autoAssignedToDoor: autoAssigned.doorNumber,
+      autoAssignedCarrier: autoAssigned.carrier,
+    }),
+  }, { userId: req.user.userId, username: loaderName }, facilityId);
+
+  res.json({ success: true, trailer, message: "Trailer marked as received", autoAssigned });
 });
 
 /**
@@ -608,6 +809,40 @@ router.delete("/shipped/:id", requireAuth, requireRole("user"), (req, res) => {
     trailerNumber: shippedTrailer.number,
     carrier: shippedTrailer.carrier,
     shipDate: shippedTrailer.shippedAt,
+  }, req.user);
+
+  res.json({ success: true });
+});
+
+/**
+ * DELETE /api/received/:id
+ * Permanently delete a received trailer record.
+ *
+ * Use this when cleaning up old received trailers from the archive.
+ */
+router.delete("/received/:id", requireAuth, requireRole("user"), (req, res) => {
+  const facilityId = req.user.currentFacility || req.user.homeFacility;
+  const { id } = req.params;
+  const state = loadState(facilityId);
+
+  const receivedTrailer = state.receivedTrailers?.find((t) => t.id === id);
+
+  if (!receivedTrailer) {
+    return res.status(404).json({ error: "Received trailer not found" });
+  }
+
+  state.receivedTrailers = state.receivedTrailers.filter((t) => t.id !== id);
+
+  saveState(state, facilityId);
+
+  // Broadcast received trailer deletion to all clients
+  broadcastStateChange("trailer", "delete", { trailerId: id, trailer: receivedTrailer, type: "received" }, facilityId);
+
+  addHistoryEntry("RECEIVED_DELETED", {
+    trailerId: id,
+    trailerNumber: receivedTrailer.number,
+    carrier: receivedTrailer.carrier,
+    receivedDate: receivedTrailer.receivedAt,
   }, req.user);
 
   res.json({ success: true });

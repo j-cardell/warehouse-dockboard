@@ -67,6 +67,8 @@ function loadState(facilityId = DEFAULT_FACILITY_ID) {
       if (!state.hasOwnProperty("staging")) state.staging = null;
       if (!state.queuedTrailers) state.queuedTrailers = [];
       if (!state.appointmentQueue) state.appointmentQueue = [];
+      if (!state.shippedTrailers) state.shippedTrailers = [];
+      if (!state.receivedTrailers) state.receivedTrailers = [];
       return state;
     } catch (e) {
       console.error(`Error loading state:`, e);
@@ -81,6 +83,8 @@ function loadState(facilityId = DEFAULT_FACILITY_ID) {
     staging: null,
     queuedTrailers: [],
     appointmentQueue: [],
+    shippedTrailers: [],
+    receivedTrailers: [],
   };
 }
 

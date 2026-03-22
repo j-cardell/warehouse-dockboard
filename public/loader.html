@@ -150,7 +150,12 @@
         }
 
         .screen.active {
-            display: flex;
+            display: flex !important;
+        }
+
+        /* Ensure non-active screens are hidden */
+        .screen:not(.active) {
+            display: none !important;
         }
 
         /* Ensure screen content fits */
@@ -246,31 +251,13 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: clamp(0.5rem, 3vw, 1rem);
             font-size: var(--font-lg);
-            min-width: min(280px, 80vw);
+            min-width: min(200px, 60vw);
+            height: 100%;
         }
 
-        .pin-dot {
-            width: clamp(1rem, 4vw, 1.5rem);
-            height: clamp(1rem, 4vw, 1.5rem);
-            border-radius: 50%;
-            background: var(--text-muted);
-            opacity: 0.3;
-            transition: all 0.15s ease;
-            flex-shrink: 0;
-        }
-
-        .pin-dot.filled {
-            background: var(--accent-light);
-            opacity: 1;
-            transform: scale(1.1);
-        }
-
-        .pin-dot.filled {
-            background: var(--accent-light);
-            opacity: 1;
-            transform: scale(1.1);
+        #pin-placeholder {
+            letter-spacing: 0.3em;
         }
 
         .keypad {
@@ -293,9 +280,16 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
 
-        .key:hover, .key:active {
+        .key:hover {
+            background: var(--accent);
+            border-color: var(--accent-light);
+        }
+
+        .key:active {
             background: var(--accent);
             border-color: var(--accent-light);
             transform: scale(0.95);
@@ -315,15 +309,27 @@
             font-size: var(--font-md);
         }
 
-        .key.submit.pin-submit,
         .key.submit.door-submit {
             grid-column: span 3;
+        }
+
+        .key.door-unlock {
+            grid-column: span 1;
+            background: var(--success);
+        }
+
+        .key.pin-unlock {
+            grid-column: span 1;
+            background: var(--success);
         }
 
         /* PIN screen specific - ensure it fits */
         #screen-pin {
             justify-content: flex-start;
             padding-top: clamp(1rem, 5vh, 2rem);
+            max-height: 100dvh;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         #screen-pin h2 {
@@ -334,6 +340,9 @@
         #screen-pin .door-display {
             flex-shrink: 0;
             margin-bottom: clamp(0.5rem, 3vh, 1rem);
+            height: auto;
+            min-height: 50px;
+            padding: 0.5rem 1rem;
         }
 
         #screen-pin .keypad {
@@ -345,6 +354,140 @@
         #screen-pin .key {
             min-height: 0;
             padding: clamp(0.5rem, 2vh, 1rem);
+        }
+
+        /* Login form container */
+        .login-form-container {
+            padding: 1rem;
+            max-width: 400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Login inputs row - portrait mode (stacked) */
+        .login-inputs-row {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .login-username-col,
+        .login-pin-col {
+            width: 100%;
+        }
+
+        /* Landscape layout for login - compact for phone */
+        @media (orientation: landscape) {
+            #screen-pin {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto 1fr;
+                gap: 0.25rem;
+                padding: 0.25rem 0.5rem;
+                align-items: start;
+                max-height: 100dvh;
+                overflow-y: auto;
+            }
+
+            .login-form-container {
+                max-width: none;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* Horizontal row for username and PIN */
+            .login-inputs-row {
+                display: flex;
+                flex-direction: row;
+                gap: 0.25rem;
+                align-items: flex-end;
+            }
+
+            .login-username-col,
+            .login-pin-col {
+                flex: 1;
+            }
+
+            .login-form-container label {
+                margin-bottom: 0.1rem;
+                font-size: 0.65rem;
+            }
+
+            .login-form-container input {
+                padding: 0.35rem;
+                font-size: 0.9rem;
+            }
+
+            .login-pin-col .door-display {
+                margin: 0;
+                height: auto;
+                min-height: 0;
+                padding: 0.35rem;
+                border: 2px solid var(--bg-lighter);
+                border-radius: 0.5rem;
+            }
+
+            .login-pin-col .pin-display {
+                font-size: 0.9rem;
+                min-width: auto;
+            }
+
+            /* Keypad fits in viewport and centered */
+            #screen-pin > .keypad {
+                max-height: calc(100dvh - 180px);
+                overflow-y: auto;
+                flex: none;
+                gap: 0.4rem;
+                margin: 0 auto;
+                max-width: 90%;
+            }
+
+            #screen-pin > .keypad .key {
+                padding: 0.5rem;
+                min-height: 44px;
+                font-size: 1rem;
+            }
+
+            #screen-pin .pin-display {
+                gap: 0.15rem;
+            }
+
+            /* Door screen keypad centered */
+            #screen-door {
+                padding: 0.5rem 1rem;
+            }
+
+            #screen-door > .keypad {
+                max-height: calc(100dvh - 180px);
+                overflow-y: auto;
+                gap: 0.4rem;
+                margin: 0 auto;
+                max-width: 90%;
+            }
+
+            #screen-door > .keypad .key {
+                min-height: 44px;
+                padding: 0.5rem;
+                font-size: 1rem;
+            }
+
+            #screen-door .door-display {
+                margin-bottom: 1rem;
+            }
+
+            #screen-door .door-number {
+                font-size: var(--font-lg);
+            }
+
+            /* Status buttons horizontal in landscape tablet */
+            .status-buttons {
+                flex-direction: row;
+                max-height: calc(100dvh - var(--header-height) - 100px);
+            }
+
+            .status-btn {
+                min-height: 100px;
+            }
         }
 
         .key.submit:hover, .key.submit:active {
@@ -533,6 +676,48 @@
             border-color: #86efac;
         }
 
+        /* Inbound button styles */
+        .status-btn-inbound-loaded {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .status-btn-inbound-loaded:hover, .status-btn-inbound-loaded:active {
+            background: #2563eb;
+            border-color: #93c5fd;
+        }
+
+        .status-btn-inbound-empty {
+            background: #60a5fa;
+            color: white;
+        }
+
+        .status-btn-inbound-empty:hover, .status-btn-inbound-empty:active {
+            background: #3b82f6;
+            border-color: #bfdbfe;
+        }
+
+        /* Final state buttons */
+        .status-btn-shipped {
+            background: #f97316;
+            color: white;
+        }
+
+        .status-btn-shipped:hover, .status-btn-shipped:active {
+            background: #ea580c;
+            border-color: #fdba8c;
+        }
+
+        .status-btn-received {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .status-btn-received:hover, .status-btn-received:active {
+            background: #2563eb;
+            border-color: #93c5fd;
+        }
+
         .status-label {
             font-size: clamp(1.5rem, 8vw, 3rem);
             margin-bottom: 0.5rem;
@@ -703,23 +888,126 @@
                 margin-bottom: 0.5rem;
             }
 
-            /* PIN screen in landscape */
-            #screen-pin .keypad {
+            /* PIN screen in landscape - compact for phone */
+            #screen-pin {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 0.25rem;
+                padding: 0.25rem;
+            }
+
+            #screen-pin h2 {
+                grid-column: 1 / -1;
+                margin-bottom: 0.25rem;
+                font-size: 1rem;
+            }
+
+            .login-form-container {
+                padding: 0.25rem;
+            }
+
+            .login-inputs-row {
+                display: flex;
+                flex-direction: row;
+                gap: 0.25rem;
+                align-items: flex-end;
+            }
+
+            .login-username-col,
+            .login-pin-col {
+                flex: 1;
+            }
+
+            .login-form-container label {
+                margin-bottom: 0.1rem;
+                font-size: 0.65rem;
+            }
+
+            .login-form-container input {
+                padding: 0.35rem;
+                font-size: 0.85rem;
+            }
+
+            .login-pin-col .door-display {
+                margin: 0;
+                height: auto;
+                min-height: 0;
+                padding: 0.35rem;
+                border: 2px solid var(--bg-lighter);
+                border-radius: 0.5rem;
+            }
+
+            .login-pin-col .pin-display {
+                font-size: 0.85rem;
+                min-width: auto;
+            }
+
+            /* Keypad fits in viewport and centered */
+            #screen-pin > .keypad {
+                max-height: calc(100dvh - 150px);
+                overflow-y: auto;
+                gap: 0.35rem;
+                margin: 0 auto;
+                max-width: 90%;
+            }
+
+            #screen-pin > .keypad .key {
+                min-height: 40px;
+                padding: 0.4rem;
+                font-size: 0.95rem;
+            }
+
+            #screen-pin .pin-display {
+                min-width: auto;
+                gap: 0.15rem;
+            }
+
+            #screen-pin .door-display {
+                margin-bottom: 0.2rem;
+                padding: 0.25rem;
+                height: auto;
+                min-height: 26px;
+            }
+
+            /* Door screen keypad fits in viewport and centered */
+            #screen-door {
+                padding: 0.5rem;
+                gap: 0.5rem;
+            }
+
+            #screen-door > .keypad {
+                max-height: calc(100dvh - 150px);
+                overflow-y: auto;
+                gap: 0.35rem;
+                margin: 0 auto;
+                max-width: 90%;
+            }
+
+            #screen-door > .keypad .key {
+                min-height: 40px;
+                padding: 0.4rem;
+                font-size: 0.95rem;
+            }
+
+            #screen-door .door-display {
+                margin-bottom: 0.5rem;
+                padding: 0.5rem;
+                min-height: 50px;
+            }
+
+            #screen-door .door-number {
+                font-size: var(--font-lg);
+            }
+
+            /* Status buttons horizontal in landscape */
+            .status-buttons {
+                flex-direction: row;
                 max-height: calc(100dvh - var(--header-height) - 100px);
             }
 
-            #screen-pin .key {
-                min-height: 35px;
-                padding: 0.25rem;
-            }
-            .status-buttons {
-                flex-direction: row;
-                max-height: calc(100dvh - var(--header-height) - 80px);
-            }
-
             .status-btn {
-                min-height: 60px;
-                max-height: 100%;
+                min-height: 80px;
+                max-height: none;
             }
 
             .status-label {
@@ -737,6 +1025,19 @@
 
             .verify-trailer {
                 font-size: 1.5rem;
+            }
+
+            /* Notes screen wider in landscape */
+            .notes-card {
+                max-width: 80vw;
+                width: 100%;
+                margin: 0 auto;
+            }
+
+            .notes-content {
+                max-width: 100%;
+                max-height: 60vh;
+                width: 100%;
             }
 
             .verify-carrier {
@@ -787,21 +1088,19 @@
 
     <!-- Screen 0: Tablet Login (shown when token is missing/invalid) -->
     <div id="screen-pin" class="screen">
-        <h2 style="text-align: center; color: var(--text-muted);">Tablet Login</h2>
-        <div style="padding: 1rem; max-width: 400px; margin: 0 auto;">
-            <div style="margin-bottom: 1rem;">
-                <label style="display: block; color: var(--text-muted); margin-bottom: 0.5rem; font-size: var(--font-sm);">Username</label>
-                <input type="text" id="tablet-username" placeholder="Enter username" style="width: 100%; padding: 1rem; font-size: var(--font-md); background: var(--bg-light); border: 2px solid var(--bg-lighter); border-radius: 0.5rem; color: var(--text);" autocomplete="off">
-            </div>
-            <label style="display: block; color: var(--text-muted); margin-bottom: 0.5rem; font-size: var(--font-sm);">PIN</label>
-            <div class="door-display" style="margin-bottom: 1rem;">
-                <div id="pin-display-content" class="pin-display">
-                    <div class="pin-dot" data-index="0"></div>
-                    <div class="pin-dot" data-index="1"></div>
-                    <div class="pin-dot" data-index="2"></div>
-                    <div class="pin-dot" data-index="3"></div>
-                    <div class="pin-dot" data-index="4"></div>
-                    <div class="pin-dot" data-index="5"></div>
+        <div class="login-form-container">
+            <div class="login-inputs-row">
+                <div class="login-username-col">
+                    <label style="display: block; color: var(--text-muted); margin-bottom: 0.35rem; font-size: var(--font-sm);">Username</label>
+                    <input type="text" id="tablet-username" placeholder="Enter username" style="width: 100%; padding: 0.75rem; font-size: var(--font-md); background: var(--bg-light); border: 2px solid var(--bg-lighter); border-radius: 0.5rem; color: var(--text);" autocomplete="off">
+                </div>
+                <div class="login-pin-col">
+                    <label style="display: block; color: var(--text-muted); margin-bottom: 0.35rem; font-size: var(--font-sm);">PIN</label>
+                    <div class="door-display" style="margin: 0;">
+                        <div id="pin-display-content" class="pin-display">
+                            <span id="pin-placeholder" style="color: var(--text-muted); opacity: 0.5;">•••</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -817,7 +1116,7 @@
             <button class="key" data-pin="9">9</button>
             <button class="key backspace" data-pin="backspace">⌫</button>
             <button class="key" data-pin="0">0</button>
-            <button class="key submit pin-submit" data-pin="submit">UNLOCK</button>
+            <button class="key submit pin-unlock" data-pin="submit">UNLOCK</button>
         </div>
         <div id="pin-error" style="text-align: center; color: var(--danger); margin-top: 1rem; display: none;">
             Invalid credentials
@@ -851,7 +1150,7 @@
             <button class="key" data-key="9">9</button>
             <button class="key backspace" data-key="backspace">⌫</button>
             <button class="key" data-key="0">0</button>
-            <button class="key submit door-submit" data-key="submit">SUBMIT</button>
+            <button class="key submit door-unlock" data-key="submit">SUBMIT</button>
         </div>
     </div>
 
@@ -872,7 +1171,6 @@
     <!-- Screen 4: Notes Display (if trailer has notes) -->
     <div id="screen-notes" class="screen">
         <div class="notes-card">
-            <div class="notes-icon">📝</div>
             <div class="notes-title">Trailer Notes</div>
             <div class="notes-content" id="trailer-notes-text"></div>
             <div class="notes-tap">Tap anywhere to continue</div>
@@ -884,16 +1182,10 @@
         <div class="status-header">
             <div class="status-door">🚪 DOOR <span id="status-door-num"></span></div>
             <div class="status-trailer" id="status-trailer-info"></div>
+            <div id="trailer-direction-badge" style="font-size: 0.75rem; margin-top: 0.5rem;"></div>
         </div>
-        <div class="status-buttons">
-            <button class="status-btn status-btn-empty" id="btn-empty">
-                <span class="status-label">EMPTY</span>
-                <span class="status-icon">🔴</span>
-            </button>
-            <button class="status-btn status-btn-loaded" id="btn-loaded">
-                <span class="status-label">LOADED</span>
-                <span class="status-icon">🟢</span>
-            </button>
+        <div class="status-buttons" id="status-buttons-container">
+            <!-- Buttons will be dynamically inserted based on direction -->
         </div>
     </div>
 
@@ -956,8 +1248,17 @@
 
         // Show a specific screen
         function showScreen(name) {
-            Object.values(screens).forEach(s => s.classList.remove('active'));
-            screens[name].classList.add('active');
+            console.log('[showScreen] Switching to:', name);
+            Object.values(screens).forEach(s => {
+                if (s) {
+                    s.classList.remove('active');
+                }
+            });
+            if (screens[name]) {
+                screens[name].classList.add('active');
+            } else {
+                console.error('[showScreen] Screen not found:', name);
+            }
 
             // Hide loader name on PIN screen, show on others
             const loaderDiv = document.getElementById('current-loader');
@@ -1079,14 +1380,26 @@
 
         // Update PIN display
         function updatePinDisplay() {
-            const dots = document.querySelectorAll('.pin-dot');
-            dots.forEach((dot, index) => {
-                if (index < currentPin.length) {
-                    dot.classList.add('filled');
+            const display = document.getElementById('pin-display-content');
+            const placeholder = document.getElementById('pin-placeholder');
+
+            if (currentPin.length === 0) {
+                // Show placeholder dots that don't reveal length
+                if (placeholder) {
+                    placeholder.style.display = '';
                 } else {
-                    dot.classList.remove('filled');
+                    display.innerHTML = '<span id="pin-placeholder" style="color: var(--text-muted); opacity: 0.5;">•••</span>';
                 }
-            });
+            } else {
+                // Hide placeholder and show filled bullets
+                if (placeholder) placeholder.style.display = 'none';
+                // Create bullets for entered digits only, scale to fit container
+                const bullets = '●'.repeat(currentPin.length);
+                // Calculate letter spacing based on number of bullets (tighter spacing for more bullets)
+                const letterSpacing = currentPin.length > 8 ? '0.05em' : currentPin.length > 5 ? '0.1em' : '0.2em';
+                const fontSize = currentPin.length > 10 ? 'clamp(0.875rem, 2vw, 1.1rem)' : 'var(--font-md)';
+                display.innerHTML = `<span style="color: var(--accent-light); letter-spacing: ${letterSpacing}; font-size: ${fontSize};">${bullets}</span>`;
+            }
         }
 
         // Load loader names (for name selection - admin users with loader role)
@@ -1239,15 +1552,23 @@
                 if (k === 'backspace') {
                     currentPin = currentPin.slice(0, -1);
                 } else if (k === 'submit') {
-                    if (currentPin.length === 6) {
+                    if (currentPin.length >= 4) {
                         loginWithPin(currentPin);
                     }
                     return;
-                } else if (currentPin.length < 6) {
+                } else {
                     currentPin += k;
                 }
 
                 updatePinDisplay();
+            });
+
+            // Remove active state after touch
+            key.addEventListener('touchend', () => {
+                key.blur();
+            });
+            key.addEventListener('touchcancel', () => {
+                key.blur();
             });
         });
 
@@ -1265,6 +1586,14 @@
                 }
 
                 updateDoorDisplay();
+            });
+
+            // Remove active state after touch
+            key.addEventListener('touchend', () => {
+                key.blur();
+            });
+            key.addEventListener('touchcancel', () => {
+                key.blur();
             });
         });
 
@@ -1342,6 +1671,60 @@
         function showStatusScreen() {
             document.getElementById('status-door-num').textContent = currentDoorNumber;
             document.getElementById('status-trailer-info').textContent = `${currentTrailer.carrier} ${currentTrailer.number}`;
+
+            // Show direction badge
+            const isInbound = currentTrailer.direction === 'inbound';
+            const directionBadge = document.getElementById('trailer-direction-badge');
+            if (isInbound) {
+                directionBadge.innerHTML = '<span style="color: #3b82f6;">📥 INBOUND</span>';
+            } else {
+                directionBadge.innerHTML = '<span style="color: #f59e0b;">📤 OUTBOUND</span>';
+            }
+
+            // Build status buttons based on direction
+            const buttonsContainer = document.getElementById('status-buttons-container');
+            buttonsContainer.innerHTML = '';
+
+            if (isInbound) {
+                // Inbound: Loaded (green), Empty (amber), Received (blue final state)
+                buttonsContainer.innerHTML = `
+                    <button class="status-btn status-btn-loaded" id="btn-loaded">
+                        <span class="status-label">LOADED</span>
+                        <span class="status-icon">📦</span>
+                    </button>
+                    <button class="status-btn status-btn-empty" id="btn-empty">
+                        <span class="status-label">EMPTY</span>
+                        <span class="status-icon">📭</span>
+                    </button>
+                    <button class="status-btn status-btn-received" id="btn-received">
+                        <span class="status-label">RECEIVED</span>
+                        <span class="status-icon">✅</span>
+                    </button>
+                `;
+            } else {
+                // Outbound: Empty (amber), Loaded (green), Shipped (final state)
+                buttonsContainer.innerHTML = `
+                    <button class="status-btn status-btn-empty" id="btn-empty">
+                        <span class="status-label">EMPTY</span>
+                        <span class="status-icon">📭</span>
+                    </button>
+                    <button class="status-btn status-btn-loaded" id="btn-loaded">
+                        <span class="status-label">LOADED</span>
+                        <span class="status-icon">📦</span>
+                    </button>
+                    <button class="status-btn status-btn-shipped" id="btn-shipped">
+                        <span class="status-label">SHIPPED</span>
+                        <span class="status-icon">🚚</span>
+                    </button>
+                `;
+            }
+
+            // Add event listeners to new buttons
+            document.getElementById('btn-empty')?.addEventListener('click', () => updateStatus('empty'));
+            document.getElementById('btn-loaded')?.addEventListener('click', () => updateStatus('loaded'));
+            document.getElementById('btn-shipped')?.addEventListener('click', () => updateStatus('shipped'));
+            document.getElementById('btn-received')?.addEventListener('click', () => updateStatus('received'));
+
             showScreen('status');
         }
 
@@ -1349,36 +1732,62 @@
             showScreen('error');
         });
 
-        // Status buttons
-        document.getElementById('btn-empty').addEventListener('click', () => updateStatus('empty'));
-        document.getElementById('btn-loaded').addEventListener('click', () => updateStatus('loaded'));
-
         // Update status
         async function updateStatus(status) {
             document.getElementById('loading').classList.add('active');
 
             try {
-                const res = await fetch('/api/loader/status', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        doorNumber: parseInt(currentDoorNumber),
-                        status: status,
-                        loaderName: selectedOperatorName || currentLoader
-                    })
-                });
+                let res, data;
+                const operatorName = selectedOperatorName || currentLoader;
 
-                const data = await res.json();
+                if (status === 'shipped') {
+                    // Ship the trailer
+                    res = await fetch(`/api/trailers/${currentTrailer.id}/ship`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            loaderName: operatorName
+                        })
+                    });
+                    data = await res.json();
+                } else if (status === 'received') {
+                    // Receive the trailer
+                    res = await fetch(`/api/trailers/${currentTrailer.id}/receive`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            loaderName: operatorName
+                        })
+                    });
+                    data = await res.json();
+                } else {
+                    // Regular status update (empty/loaded)
+                    res = await fetch('/api/loader/status', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                            doorNumber: parseInt(currentDoorNumber),
+                            status: status,
+                            loaderName: operatorName
+                        })
+                    });
+                    data = await res.json();
+                }
 
                 if (!res.ok) {
                     throw new Error(data.error || 'Failed to update status');
                 }
 
                 // Show confirmation with operator name
-                const operatorName = selectedOperatorName || currentLoader;
                 document.getElementById('confirm-details').textContent =
                     `${operatorName} marked ${currentTrailer.carrier} ${currentTrailer.number} as ${status.toUpperCase()} at Door ${currentDoorNumber}`;
                 showScreen('confirm');
@@ -1410,16 +1819,6 @@
 
         // Confirmation screen tap to reset
         document.getElementById('screen-confirm').addEventListener('click', resetToNameSelection);
-
-        // Enter key on username field triggers login
-        document.getElementById('tablet-username')?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                // Focus the PIN entry or trigger login if PIN is complete
-                if (currentPin.length === 6) {
-                    loginWithPin(currentPin);
-                }
-            }
-        });
 
         // iOS Safari fix: ensure logout item is clickable via touch events
         const logoutItem = document.querySelector('.logout-item');
@@ -1454,7 +1853,17 @@
 
         // Initialize
         async function init() {
+            // Quick synchronous check - if no token, show PIN immediately to avoid flash
+            if (!token) {
+                showScreen('pin');
+                return;
+            }
+
+            // Show loading state while we verify
+            document.body.style.opacity = '0.5';
             const authed = await checkAuth();
+            document.body.style.opacity = '1';
+
             if (authed) {
                 await loadLoaderNames();
             }

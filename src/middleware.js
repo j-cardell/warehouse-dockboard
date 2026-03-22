@@ -171,13 +171,13 @@ async function requireAuth(req, res, next) {
 
 /**
  * Express middleware to require a specific role or higher.
- * Hierarchy: admin > user > viewer
+ * Hierarchy: admin > user/loader > viewer
  * Must be used after requireAuth middleware.
  *
- * @param {string} minRole - Minimum required role ('admin', 'user', or 'viewer')
+ * @param {string} minRole - Minimum required role ('admin', 'user', 'loader', or 'viewer')
  */
 function requireRole(minRole) {
-  const roleHierarchy = { viewer: 0, user: 1, admin: 2 };
+  const roleHierarchy = { viewer: 0, user: 1, loader: 1, 'loading-tablet': 1, admin: 2 };
 
   return (req, res, next) => {
     if (!req.user) {

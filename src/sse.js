@@ -122,9 +122,29 @@ function broadcastStateChange(entity, action, data, facilityId) {
   }, null, facilityId);
 }
 
+/**
+ * Broadcast a toast notification to all clients in a specific facility
+ * Used for loader actions and other user-initiated events
+ * @param {string} type - Toast type (success, info, warning, error)
+ * @param {string} message - Toast message
+ * @param {object} data - Additional data (loader name, trailer info, etc.)
+ * @param {string} facilityId - Facility ID to filter by
+ * @param {string} excludeUserId - Optional user ID to exclude (the user who triggered it)
+ */
+function broadcastToast(type, message, data = {}, facilityId, excludeUserId = null) {
+  broadcast("toast", {
+    type,
+    message,
+    data,
+    facilityId,
+    timestamp: new Date().toISOString(),
+  }, excludeUserId, facilityId);
+}
+
 module.exports = {
   handleSSE,
   broadcast,
   broadcastStateChange,
+  broadcastToast,
   clients,
 };

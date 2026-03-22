@@ -145,6 +145,280 @@ router.post("/", requireAuth, requireRole("user"), (req, res) => {
   }
 });
 
+// Export shipped and received trailers to Excel
+router.get("/export", requireAuth, async (req, res) => {
+  try {
+    const facilityId = req.user.currentFacility || req.user.homeFacility;
+    const { type = "shipped", dateFrom, dateTo } = req.query;
+
+    // Modern color palette
+    const colors = {
+      primary: "FF2563EB",
+      primaryLight: "FFDBEAFE",
+      secondary: "FF059669",
+      secondaryLight: "FFD1FAE5",
+      accent: "FF7C3AED",
+      dark: "FF1E293B",
+      gray: "FFF1F5F9",
+      white: "FFFFFFFF",
+      border: "FFE2E8F0",
+    };
+
+    // Create workbook
+    const ExcelJS = require("exceljs");
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Warehouse Dock Board";
+    workbook.created = new Date();
+
+    // Load state
+    const state = loadState(facilityId);
+
+    // Get facility info
+    const facility = getFacility(facilityId);
+    const facilityName = facility?.name || "Unknown Facility";
+
+    // Get trailers based on type
+    let trailers = [];
+    let sheetName = "";
+    let statusLabel = "";
+    let actionLabel = "";
+
+    if (type === "shipped") {
+      trailers = state.shippedTrailers || [];
+      sheetName = "Shipped Trailers";
+      statusLabel = "Shipped";
+      actionLabel = "Shipped By";
+    } else if (type === "received") {
+      trailers = state.receivedTrailers || [];
+      sheetName = "Received Trailers";
+      statusLabel = "Received";
+      actionLabel = "Received By";
+    } else {
+      return res.status(400).json({ error: "Invalid type. Use 'shipped' or 'received'" });
+    }
+
+    // Filter by date range
+    if (dateFrom || dateTo) {
+      trailers = trailers.filter((t) => {
+        const dateField = type === "shipped" ? t.shippedAt : t.receivedAt;
+        const itemDate = new Date(dateField || t.updatedAt || t.createdAt);
+        const entryDate = itemDate.toISOString().split("T")[0];
+        if (dateFrom && entryDate < dateFrom) return false;
+        if (dateTo && entryDate > dateTo) return false;
+        return true;
+      });
+    }
+
+    // Sort by date (most recent first)
+    trailers.sort(
+      (a, b) =>
+        new Date(
+          (type === "shipped" ? b.shippedAt : b.receivedAt) || b.updatedAt || b.createdAt,
+        ) -
+        new Date(
+          (type === "shipped" ? a.shippedAt : a.receivedAt) || a.updatedAt || a.createdAt,
+        ),
+    );
+
+    // === SUMMARY SHEET (First) ===
+    const summarySheet = workbook.addWorksheet("Summary");
+
+    // Summary columns - first header is the report title
+    summarySheet.columns = [
+      { header: `${statusLabel} Trailers Report`, key: "metric", width: 35 },
+      { header: "", key: "value", width: 25 },
+    ];
+
+    // Add metadata rows
+    summarySheet.addRow([`Facility: ${facilityName}`, ""]);
+
+    // Calculate date range text
+    let dateRangeText;
+    if (dateFrom || dateTo) {
+      dateRangeText = `Date Range: ${dateFrom || "All"} to ${dateTo || "All"}`;
+    } else if (trailers.length > 0) {
+      // Find earliest and latest dates from trailers
+      const dates = trailers.map(t => {
+        const dateField = type === "shipped" ? t.shippedAt : t.receivedAt;
+        return new Date(dateField || t.updatedAt || t.createdAt);
+      });
+      const earliestDate = new Date(Math.min(...dates));
+      const latestDate = new Date(Math.max(...dates));
+      const formatDate = (d) => `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+      dateRangeText = `Date Range: ${formatDate(earliestDate)} - ${formatDate(latestDate)}`;
+    } else {
+      dateRangeText = `Date Range: All Dates`;
+    }
+    summarySheet.addRow([dateRangeText, ""]);
+    summarySheet.addRow([`Generated: ${new Date().toLocaleString()}`, ""]);
+    summarySheet.addRow([]); // Empty row
+    summarySheet.addRow(["Summary Statistics", ""]);
+    summarySheet.addRow(["Total Records:", trailers.length]);
+    summarySheet.addRow([]); // Empty row
+
+    // Carrier breakdown
+    const carrierCounts = {};
+    trailers.forEach((t) => {
+      const carrier = t.carrier || "Unknown";
+      carrierCounts[carrier] = (carrierCounts[carrier] || 0) + 1;
+    });
+
+    summarySheet.addRow(["Carrier Breakdown", ""]);
+    Object.entries(carrierCounts)
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([carrier, count]) => {
+        summarySheet.addRow([carrier, count]);
+      });
+
+    summarySheet.addRow([]); // Empty row
+
+    // Customer breakdown
+    const customerCounts = {};
+    trailers.forEach((t) => {
+      const customer = t.customer || "Unknown";
+      customerCounts[customer] = (customerCounts[customer] || 0) + 1;
+    });
+
+    summarySheet.addRow(["Customer Breakdown", ""]);
+    Object.entries(customerCounts)
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([customer, count]) => {
+        summarySheet.addRow([customer, count]);
+      });
+
+    // Style summary sheet
+    // Header row (contains report title)
+    const headerCellA = summarySheet.getCell("A1");
+    headerCellA.font = { size: 14, bold: true, color: { argb: colors.dark } };
+    headerCellA.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: colors.primaryLight },
+    };
+
+    // Metadata rows
+    [2, 3, 4].forEach((rowNum) => {
+      summarySheet.getCell(`A${rowNum}`).font = { size: 10, color: { argb: colors.dark } };
+    });
+
+    // Calculate section header row numbers (adjusted for removed title row)
+    const carrierBreakdownRow = 9;
+    const customerBreakdownRow = 11 + Object.keys(carrierCounts).length;
+
+    // Section headers - only style cells A and B, not entire row
+    [5, carrierBreakdownRow, customerBreakdownRow].forEach((rowNum) => {
+      const cellA = summarySheet.getCell(`A${rowNum}`);
+      const cellB = summarySheet.getCell(`B${rowNum}`);
+      if (cellA.value) {
+        cellA.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: colors.primary },
+        };
+        cellA.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        if (cellB.value !== undefined && cellB.value !== null) {
+          cellB.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: colors.primary },
+          };
+          cellB.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        }
+      }
+    });
+
+    // === DATA SHEET (Second) ===
+    const mainSheet = workbook.addWorksheet(sheetName);
+
+    // Define columns
+    mainSheet.columns = [
+      { header: "Date", key: "date", width: 15 },
+      { header: "Time", key: "time", width: 12 },
+      { header: "Carrier", key: "carrier", width: 25 },
+      { header: "Trailer #", key: "number", width: 15 },
+      { header: "Load #", key: "loadNumber", width: 15 },
+      { header: "Customer", key: "customer", width: 25 },
+      { header: "Door", key: "door", width: 10 },
+      { header: "Direction", key: "direction", width: 12 },
+      { header: actionLabel, key: "user", width: 20 },
+      { header: "Facility", key: "facility", width: 20 },
+      { header: "Facility ID", key: "facilityId", width: 15 },
+    ];
+
+    // Add data rows
+    trailers.forEach((t) => {
+      const dateField = type === "shipped" ? t.shippedAt : t.receivedAt;
+      const itemDate = new Date(dateField || t.updatedAt || t.createdAt);
+      const userField = type === "shipped" ? t.shippedBy : t.receivedBy;
+
+      mainSheet.addRow({
+        date: itemDate.toLocaleDateString(),
+        time: itemDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        carrier: t.carrier || "",
+        number: t.number || "",
+        loadNumber: t.loadNumber || "",
+        customer: t.customer || "",
+        door: t.doorNumber || "",
+        direction: t.direction || "outbound",
+        user: userField || "",
+        facility: facilityName,
+        facilityId: facilityId,
+      });
+    });
+
+    // Style the header row (row 1) - apply to each cell individually
+    const headerColumns = ["date", "time", "carrier", "number", "loadNumber", "customer", "door", "direction", "user", "facility", "facilityId"];
+    headerColumns.forEach((col) => {
+      const cell = mainSheet.getColumn(col).header;
+      const cellRef = mainSheet.getRow(1).getCell(col);
+      cellRef.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cellRef.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: colors.primary },
+      };
+      cellRef.alignment = { vertical: "middle", horizontal: "center" };
+    });
+
+    // Apply zebra striping to data rows - only to cells with data
+    for (let i = 2; i <= mainSheet.rowCount; i++) {
+      if (i % 2 === 0) {
+        headerColumns.forEach((col) => {
+          mainSheet.getRow(i).getCell(col).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: colors.gray },
+          };
+        });
+      }
+      headerColumns.forEach((col) => {
+        mainSheet.getRow(i).getCell(col).alignment = { vertical: "middle" };
+      });
+    }
+
+    // Center align specific columns
+    mainSheet.getColumn("door").alignment = { horizontal: "center" };
+    mainSheet.getColumn("direction").alignment = { horizontal: "center" };
+
+    // Generate filename
+    const dateLabel = dateFrom && dateTo ? `${dateFrom}-to-${dateTo}` : new Date().toISOString().split("T")[0];
+    const filename = `${facilityId}-${type}-trailers-${facilityName.replace(/\s+/g, "-").toLowerCase()}-${dateLabel}.xlsx`;
+
+    // Write to buffer and send
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error("[Export] Error:", error);
+    res.status(500).json({ error: "Failed to export trailers" });
+  }
+});
+
 // Download archive file (protected)
 router.get("/:filename", requireAuth, (req, res) => {
   try {
@@ -316,6 +590,9 @@ function sanitizeArchiveData(data) {
       : [],
     shippedTrailers: Array.isArray(data.shippedTrailers)
       ? data.shippedTrailers
+      : [],
+    receivedTrailers: Array.isArray(data.receivedTrailers)
+      ? data.receivedTrailers
       : [],
   };
 

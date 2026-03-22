@@ -34,6 +34,7 @@ const {
   calculateDailyDwell,
   getEffectiveDwellHours,
 } = require("../analytics");
+const ExcelJS = require("exceljs");
 
 /**
  * Load combined analytics from multiple facilities
@@ -344,7 +345,7 @@ router.delete("/", requireAuth, requireRole("admin"), (req, res) => {
 
 router.get("/violations", requireAuth, (req, res) => {
   try {
-    const { period = "day" } = req.query;
+    const { period = "day", direction } = req.query;
     const { facilityIds, isCombined } = getFacilityFilter(req, req.user);
 
     // For combined view, aggregate from all facilities
@@ -353,7 +354,7 @@ router.get("/violations", requireAuth, (req, res) => {
       facilityIds.forEach(id => {
         const facility = getFacility(id);
         const timezone = facility?.config?.timezone || "UTC";
-        const violations = getDwellViolations(period, id, timezone);
+        const violations = getDwellViolations(period, id, timezone, direction);
         violations.forEach(v => {
           v._facility = id; // Tag with facility
         });
@@ -397,7 +398,7 @@ router.get("/violations", requireAuth, (req, res) => {
         const settings = loadSettings(facilityIds[0]);
         timezone = settings?.timezone || "UTC";
       }
-      data = getDwellViolations(period, facilityIds[0], timezone);
+      data = getDwellViolations(period, facilityIds[0], timezone, direction);
     }
 
     res.json({
@@ -419,6 +420,7 @@ router.get("/violations", requireAuth, (req, res) => {
 router.get("/current-violations", requireAuth, (req, res) => {
   try {
     const { facilityIds, isCombined } = getFacilityFilter(req, req.user);
+    const { direction } = req.query;
     const now = Date.now();
     const allViolations = [];
 
@@ -451,6 +453,9 @@ router.get("/current-violations", requireAuth, (req, res) => {
         if (!t.createdAt || !t.doorId || !t.doorNumber) return;
         if (t.isLive !== true && t.isLive !== 'true') return; // Only count live trailers
 
+        // Filter by direction if specified
+        if (direction && t.direction !== direction) return;
+
         const resets = t.dwellResets || [];
         const actualDwellHours = getActualDwellHours(t.createdAt, resets);
 
@@ -466,6 +471,7 @@ router.get("/current-violations", requireAuth, (req, res) => {
             doorNumber: t.doorNumber,
             location: `Door ${t.doorNumber}`,
             status: t.status,
+            direction: t.direction,
             facility: isCombined ? facilityId : undefined,
           });
         }
@@ -569,7 +575,7 @@ router.get("/heatmap", requireAuth, (req, res) => {
 router.get("/position-patterns", requireAuth, (req, res) => {
   try {
     const { facilityIds, isCombined } = getFacilityFilter(req, req.user);
-    const { carrier, customer, dateFrom, dateTo } = req.query;
+    const { carrier, customer, dateFrom, dateTo, direction } = req.query;
 
     // Load and combine history from all selected facilities
     const allHistory = [];
@@ -647,6 +653,27 @@ router.get("/position-patterns", requireAuth, (req, res) => {
 
     const doorFrequency = {};
     const comboStats = {};
+    const trailerDirections = {}; // Track direction per trailer
+
+    // Pre-load trailer directions from state
+    facilityIds.forEach((facilityId) => {
+      const state = loadState(facilityId);
+      state.trailers?.forEach((t) => {
+        if (t.id && t.direction) {
+          trailerDirections[t.id] = t.direction;
+        }
+      });
+      state.yardTrailers?.forEach((t) => {
+        if (t.id && t.direction) {
+          trailerDirections[t.id] = t.direction;
+        }
+      });
+      state.queuedTrailers?.forEach((t) => {
+        if (t.id && t.direction) {
+          trailerDirections[t.id] = t.direction;
+        }
+      });
+    });
 
     allHistory.forEach((entry) => {
       const entryTime = new Date(entry.timestamp).getTime();
@@ -667,9 +694,14 @@ router.get("/position-patterns", requireAuth, (req, res) => {
         entry.details?.customer ||
         allTrailers[entry.trailerId]?.customer;
       const entryCarrier = entry.carrier;
+      const entryDirection = entry.direction ||
+        entry.details?.direction ||
+        trailerDirections[entry.trailerId] ||
+        'outbound'; // Default to outbound for backward compatibility
 
       if (carrier && entryCarrier !== carrier) return;
       if (customer && entryCustomer !== customer) return;
+      if (direction && entryDirection !== direction) return;
 
       // For combined view, prefix door number with facility
       const doorKey = isCombined ? `${entry._facility}-Door ${doorNum}` : doorNum;
@@ -754,6 +786,934 @@ router.get("/position-patterns", requireAuth, (req, res) => {
         })),
     });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Export violations to Excel with multiple sheets and chart
+router.get("/export-violations", requireAuth, async (req, res) => {
+  try {
+    const { facilityIds, isCombined } = getFacilityFilter(req, req.user);
+    const { direction } = req.query;
+    const now = Date.now();
+
+    // Modern color palette
+    const colors = {
+      primary: 'FF2563EB',
+      primaryLight: 'FFDBEAFE',
+      secondary: 'FF059669',
+      secondaryLight: 'FFD1FAE5',
+      accent: 'FF7C3AED',
+      accentLight: 'FFE9D5FF',
+      dark: 'FF1E293B',
+      gray: 'FFF1F5F9',
+      white: 'FFFFFFFF',
+      border: 'FFE2E8F0',
+      danger: 'FFDC2626',
+      dangerLight: 'FFFEE2E2'
+    };
+
+    // Create workbook
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Warehouse Dock Board';
+    workbook.created = new Date();
+
+    // Get timezone from first facility
+    const facility = getFacility(facilityIds[0]);
+    let timezone = facility?.config?.timezone;
+    if (!timezone) {
+      const settings = loadSettings(facilityIds[0]);
+      timezone = settings?.timezone || "UTC";
+    }
+
+    // Get actual dwell hours (not capped at 6)
+    const getActualDwellHours = (createdAt, resets = []) => {
+      const created = new Date(createdAt).getTime();
+      if (resets && resets.length > 0) {
+        const recentResets = resets
+          .map((r) => new Date(r).getTime())
+          .filter((r) => now - r < 6 * 60 * 60 * 1000)
+          .sort((a, b) => b - a);
+        if (recentResets.length > 0) {
+          return (now - recentResets[0]) / (1000 * 60 * 60);
+        }
+      }
+      return (now - created) / (1000 * 60 * 60);
+    };
+
+    // Helper functions
+    const applyZebraStriping = (sheet, startRow, endRow) => {
+      const colKeys = sheet.columns.map(col => col.key);
+      for (let row = startRow; row <= endRow; row++) {
+        if (row % 2 === 0) {
+          colKeys.forEach(key => {
+            const cell = sheet.getRow(row).getCell(key);
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: colors.gray.replace('FF', '') }
+            };
+          });
+        }
+      }
+    };
+
+    // === SHEET 1: Summary with metadata and historical counts ===
+    const summarySheet = workbook.addWorksheet('Summary');
+
+    // Title
+    summarySheet.mergeCells('A1:E1');
+    summarySheet.getCell('A1').value = 'Violations Report';
+    summarySheet.getCell('A1').font = {
+      size: 20,
+      bold: true,
+      color: { argb: 'FFFFFFFF' }
+    };
+    summarySheet.getCell('A1').fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFDC2626' }
+    };
+    summarySheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+    summarySheet.getRow(1).height = 35;
+
+    // Metadata section
+    summarySheet.getCell('A3').value = 'Export Details';
+    summarySheet.getCell('A3').font = { size: 14, bold: true, color: { argb: 'FF1E293B' } };
+    summarySheet.getCell('A3').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    summarySheet.mergeCells('A3:E3');
+
+    const metaData = [
+      ['Generated', new Date().toLocaleString()],
+      ['Facility Filter', isCombined ? 'all' : facilityIds[0]],
+      ['Direction Filter', direction || 'all'],
+    ];
+
+    metaData.forEach((row, idx) => {
+      const rowNum = 4 + idx;
+      summarySheet.getCell(`A${rowNum}`).value = row[0];
+      summarySheet.getCell(`B${rowNum}`).value = row[1];
+      summarySheet.getCell(`A${rowNum}`).font = { bold: true, color: { argb: 'FF64748B' } };
+      summarySheet.getCell(`B${rowNum}`).font = { color: { argb: 'FF1E293B' } };
+      if (idx % 2 === 0) {
+        summarySheet.getRow(rowNum).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      }
+    });
+
+    // Current violations count
+    let currentCount = 0;
+    facilityIds.forEach((facilityId) => {
+      const state = loadState(facilityId);
+      state.trailers.forEach((t) => {
+        if (!t.createdAt || !t.doorId || !t.doorNumber) return;
+        if (t.isLive !== true && t.isLive !== 'true') return;
+        if (direction && t.direction !== direction) return;
+
+        const resets = t.dwellResets || [];
+        const actualDwellHours = getActualDwellHours(t.createdAt, resets);
+        if (actualDwellHours >= 2) currentCount++;
+      });
+    });
+
+    summarySheet.getCell('A8').value = 'Current Violations (Trailers exceeding 2 hours)';
+    summarySheet.getCell('A8').font = { size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+    summarySheet.getCell('A8').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
+    summarySheet.mergeCells('A8:E8');
+    summarySheet.getCell('A8').alignment = { horizontal: 'center' };
+
+    summarySheet.getCell('A9').value = currentCount;
+    summarySheet.getCell('A9').font = { size: 24, bold: true, color: { argb: 'FFDC2626' } };
+    summarySheet.getCell('A9').alignment = { horizontal: 'center', vertical: 'middle' };
+    summarySheet.mergeCells('A9:E9');
+    summarySheet.getRow(9).height = 40;
+
+    // Historical counts section
+    summarySheet.getCell('A11').value = 'Historical Violation Counts (Last 7 days)';
+    summarySheet.getCell('A11').font = { size: 14, bold: true, color: { argb: 'FF1E293B' } };
+    summarySheet.getCell('A11').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    summarySheet.mergeCells('A11:E11');
+
+    // Headers
+    summarySheet.getCell('A12').value = 'Date';
+    summarySheet.getCell('B12').value = 'Day';
+    summarySheet.getCell('C12').value = 'Inbound';
+    summarySheet.getCell('D12').value = 'Outbound';
+    summarySheet.getCell('E12').value = 'Total';
+    // Style each header cell individually
+    ['A', 'B', 'C', 'D', 'E'].forEach(col => {
+      const cell = summarySheet.getCell(`${col}12`);
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    // Data rows
+    const historicalData = [];
+    const today = new Date();
+    for (let i = 1; i <= 7; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' });
+
+      let inboundCount = 0;
+      let outboundCount = 0;
+
+      facilityIds.forEach((facilityId) => {
+        const analytics = loadAnalytics(facilityId);
+        const dailyStats = analytics.dailyStats?.[dateStr];
+
+        if (dailyStats?.violators) {
+          dailyStats.violators.forEach((v) => {
+            if (direction && v.direction !== direction) return;
+            if (v.direction === 'inbound') inboundCount++;
+            else outboundCount++;
+          });
+        }
+      });
+
+      const row = 12 + i;
+      summarySheet.getCell(`A${row}`).value = dateStr;
+      summarySheet.getCell(`B${row}`).value = dayOfWeek;
+      summarySheet.getCell(`C${row}`).value = inboundCount;
+      summarySheet.getCell(`D${row}`).value = outboundCount;
+      summarySheet.getCell(`E${row}`).value = inboundCount + outboundCount;
+      summarySheet.getCell(`A${row}`).alignment = { horizontal: 'left' };
+      summarySheet.getCell(`B${row}`).alignment = { horizontal: 'center' };
+      summarySheet.getCell(`C${row}`).alignment = { horizontal: 'center' };
+      summarySheet.getCell(`D${row}`).alignment = { horizontal: 'center' };
+      summarySheet.getCell(`E${row}`).alignment = { horizontal: 'center' };
+
+      // Zebra striping - only apply to cells with data
+      if (i % 2 === 0) {
+        ['A', 'B', 'C', 'D', 'E'].forEach(col => {
+          summarySheet.getCell(`${col}${row}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        });
+      }
+
+      historicalData.push({
+        date: dateStr,
+        dayOfWeek,
+        inbound: inboundCount,
+        outbound: outboundCount,
+        total: inboundCount + outboundCount
+      });
+    }
+
+    summarySheet.columns = [
+      { width: 15 },
+      { width: 10 },
+      { width: 12 },
+      { width: 12 },
+      { width: 10 }
+    ];
+
+    // === SHEET 2: Current Violations Detail ===
+    const currentViolations = [];
+    facilityIds.forEach((facilityId) => {
+      const state = loadState(facilityId);
+      state.trailers.forEach((t) => {
+        if (!t.createdAt || !t.doorId || !t.doorNumber) return;
+        if (t.isLive !== true && t.isLive !== 'true') return;
+        if (direction && t.direction !== direction) return;
+
+        const resets = t.dwellResets || [];
+        const actualDwellHours = getActualDwellHours(t.createdAt, resets);
+
+        if (actualDwellHours >= 2) {
+          currentViolations.push({
+            trailerId: t.id,
+            number: t.number || '',
+            carrier: t.carrier || '',
+            loadNumber: t.loadNumber || '',
+            customer: t.customer || '',
+            door: t.doorNumber,
+            dwellHours: Math.round(actualDwellHours * 100) / 100,
+            status: t.status,
+            direction: t.direction || 'outbound',
+            facility: facilityId,
+            createdAt: new Date(t.createdAt).toLocaleString(),
+          });
+        }
+      });
+    });
+
+    currentViolations.sort((a, b) => b.dwellHours - a.dwellHours);
+
+    if (currentViolations.length > 0) {
+      const currentSheet = workbook.addWorksheet('Current Violations');
+      currentSheet.columns = [
+        { header: 'Trailer ID', key: 'trailerId', width: 38 },
+        { header: 'Number', key: 'number', width: 15 },
+        { header: 'Carrier', key: 'carrier', width: 20 },
+        { header: 'Load #', key: 'loadNumber', width: 15 },
+        { header: 'Customer', key: 'customer', width: 20 },
+        { header: 'Door', key: 'door', width: 10 },
+        { header: 'Dwell Hours', key: 'dwellHours', width: 13 },
+        { header: 'Status', key: 'status', width: 10 },
+        { header: 'Direction', key: 'direction', width: 10 },
+        { header: 'Facility', key: 'facility', width: 15 },
+        { header: 'Created At', key: 'createdAt', width: 20 },
+      ];
+
+      currentViolations.forEach(v => currentSheet.addRow(v));
+
+      // Modern header styling - apply to each column header individually
+      const currentColKeys = ['trailerId', 'number', 'carrier', 'loadNumber', 'customer', 'door', 'dwellHours', 'status', 'direction', 'facility', 'createdAt'];
+      currentColKeys.forEach(key => {
+        const cell = currentSheet.getRow(1).getCell(key);
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFDC2626' }
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
+
+      // Center align numeric columns
+      currentSheet.getColumn('door').alignment = { horizontal: 'center' };
+      currentSheet.getColumn('dwellHours').alignment = { horizontal: 'center' };
+      currentSheet.getColumn('direction').alignment = { horizontal: 'center' };
+
+      // Apply zebra striping
+      applyZebraStriping(currentSheet, 2, currentViolations.length + 1);
+    }
+
+    // === SHEETS 3-9: Daily Historical Violation Detail ===
+    for (let i = 1; i <= 7; i++) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' });
+      const sheetName = `${dateStr} (${dayOfWeek})`;
+
+      const violationsForDay = [];
+
+      facilityIds.forEach((facilityId) => {
+        const analytics = loadAnalytics(facilityId);
+        const dailyStats = analytics.dailyStats?.[dateStr];
+
+        if (dailyStats?.violators) {
+          dailyStats.violators.forEach((v) => {
+            if (direction && v.direction !== direction) return;
+
+            violationsForDay.push({
+              trailerId: v.trailerId || '',
+              number: v.number || '',
+              carrier: v.carrier || '',
+              loadNumber: v.loadNumber || '',
+              customer: v.customer || '',
+              door: v.doorNumber || '',
+              dwellHours: v.dwellHours ? v.dwellHours.toFixed(1) : 'N/A',
+              direction: v.direction || 'outbound',
+              facility: facilityId,
+              recordedAt: v.recordedAt ? new Date(v.recordedAt).toLocaleString() : '',
+            });
+          });
+        }
+      });
+
+      violationsForDay.sort((a, b) => parseFloat(b.dwellHours || 0) - parseFloat(a.dwellHours || 0));
+
+      if (violationsForDay.length > 0) {
+        const daySheet = workbook.addWorksheet(sheetName);
+        daySheet.columns = [
+          { header: 'Trailer ID', key: 'trailerId', width: 38 },
+          { header: 'Number', key: 'number', width: 15 },
+          { header: 'Carrier', key: 'carrier', width: 20 },
+          { header: 'Load #', key: 'loadNumber', width: 15 },
+          { header: 'Customer', key: 'customer', width: 20 },
+          { header: 'Door', key: 'door', width: 10 },
+          { header: 'Dwell Hours', key: 'dwellHours', width: 13 },
+          { header: 'Direction', key: 'direction', width: 10 },
+          { header: 'Facility', key: 'facility', width: 15 },
+          { header: 'Recorded At', key: 'recordedAt', width: 20 },
+        ];
+
+        violationsForDay.forEach(v => daySheet.addRow(v));
+
+        // Modern header styling with blue gradient effect - apply to each column individually
+        const dayColKeys = ['trailerId', 'number', 'carrier', 'loadNumber', 'customer', 'door', 'dwellHours', 'direction', 'facility', 'recordedAt'];
+        dayColKeys.forEach(key => {
+          const cell = daySheet.getRow(1).getCell(key);
+          cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF2563EB' }
+          };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        // Center align numeric columns
+        daySheet.getColumn('door').alignment = { horizontal: 'center' };
+        daySheet.getColumn('dwellHours').alignment = { horizontal: 'center' };
+        daySheet.getColumn('direction').alignment = { horizontal: 'center' };
+
+        // Apply zebra striping
+        applyZebraStriping(daySheet, 2, violationsForDay.length + 1);
+      }
+    }
+
+    // Generate filename - prefix with facilityId or 'all'
+    const facilityLabel = isCombined ? 'all' : facilityIds[0];
+    const directionLabel = direction ? `${direction}-` : '';
+    const filename = `${facilityLabel}-violations-${directionLabel}${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Write to buffer and send
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Excel export error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Export patterns to Excel
+router.get("/export-patterns", requireAuth, async (req, res) => {
+  try {
+    const { facilityIds, isCombined } = getFacilityFilter(req, req.user);
+    const { carrier, customer, dateFrom, dateTo, direction } = req.query;
+
+    // Load and combine history from all selected facilities (same logic as /position-patterns)
+    const allHistory = [];
+    const allCarriersSet = new Set();
+    const allCustomersSet = new Set();
+    const trailerCustomers = {};
+
+    const getCustomerFromChanges = (changes) => {
+      if (!changes || !Array.isArray(changes)) return null;
+      const customerChange = changes.find((c) => c.field === "customer");
+      return customerChange ? customerChange.to : null;
+    };
+
+    // Get earliest analytics start date across all facilities
+    let startDate = 0;
+    facilityIds.forEach((facilityId) => {
+      const settings = loadSettings(facilityId);
+      if (settings.analyticsStartDate) {
+        const facilityStart = new Date(settings.analyticsStartDate).getTime();
+        startDate = Math.max(startDate, facilityStart);
+      }
+    });
+
+    const fromDateParam = dateFrom ? new Date(dateFrom).getTime() : 0;
+    const fromDate = Math.max(fromDateParam, startDate);
+    const toDate = dateTo
+      ? new Date(dateTo).getTime() + 24 * 60 * 60 * 1000
+      : null;
+
+    // Load current state to get customer data for trailers (fallback for old entries)
+    const allTrailers = {};
+    facilityIds.forEach((facilityId) => {
+      const state = loadState(facilityId);
+      state.trailers?.forEach((t) => {
+        if (t.customer) allTrailers[t.id] = { customer: t.customer };
+      });
+      state.yardTrailers?.forEach((t) => {
+        if (t.customer) allTrailers[t.id] = { customer: t.customer };
+      });
+      state.queuedTrailers?.forEach((t) => {
+        if (t.customer) allTrailers[t.id] = { customer: t.customer };
+      });
+      if (state.staging?.customer) {
+        allTrailers[state.staging.id] = { customer: state.staging.customer };
+      }
+    });
+
+    // Load history from all selected facilities
+    facilityIds.forEach((facilityId) => {
+      const historyData = loadHistory(facilityId);
+      const history = historyData.entries || historyData;
+
+      history.forEach((entry) => {
+        // Add facility info for combined view
+        if (isCombined) {
+          entry._facility = facilityId;
+        }
+        allHistory.push(entry);
+
+        const entryCustomer =
+          entry.customer ||
+          entry.details?.customer ||
+          getCustomerFromChanges(entry.changes) ||
+          getCustomerFromChanges(entry.details?.changes) ||
+          allTrailers[entry.trailerId]?.customer;
+
+        if (entryCustomer && entry.trailerId) {
+          trailerCustomers[entry.trailerId] = entryCustomer;
+        }
+
+        if (entry.carrier) allCarriersSet.add(entry.carrier);
+        if (entryCustomer) allCustomersSet.add(entryCustomer);
+      });
+    });
+
+    // Pre-load trailer directions from state
+    const trailerDirections = {};
+    facilityIds.forEach((facilityId) => {
+      const state = loadState(facilityId);
+      state.trailers?.forEach((t) => {
+        if (t.id && t.direction) {
+          trailerDirections[t.id] = t.direction;
+        }
+      });
+      state.yardTrailers?.forEach((t) => {
+        if (t.id && t.direction) {
+          trailerDirections[t.id] = t.direction;
+        }
+      });
+      state.queuedTrailers?.forEach((t) => {
+        if (t.id && t.direction) {
+          trailerDirections[t.id] = t.direction;
+        }
+      });
+    });
+
+    // Calculate door frequency and combo stats
+    const doorFrequency = {};
+    const comboStats = {};
+
+    allHistory.forEach((entry) => {
+      const entryTime = new Date(entry.timestamp).getTime();
+      if (fromDate && entryTime < fromDate) return;
+      if (toDate && entryTime > toDate) return;
+
+      const doorNum = entry.doorNumber || entry.toDoorNumber;
+      if (!doorNum) return;
+      if (
+        entry.action !== "MOVED_TO_DOOR" &&
+        entry.action !== "TRAILER_CREATED"
+      )
+        return;
+
+      const entryCustomer =
+        trailerCustomers[entry.trailerId] ||
+        entry.customer ||
+        entry.details?.customer ||
+        allTrailers[entry.trailerId]?.customer;
+      const entryCarrier = entry.carrier;
+      const entryDirection = entry.direction ||
+        entry.details?.direction ||
+        trailerDirections[entry.trailerId] ||
+        'outbound';
+
+      if (carrier && entryCarrier !== carrier) return;
+      if (customer && entryCustomer !== customer) return;
+      if (direction && entryDirection !== direction) return;
+
+      // For combined view, prefix door number with facility
+      const doorKey = isCombined ? `${entry._facility}-Door ${doorNum}` : doorNum;
+
+      if (!doorFrequency[doorKey]) {
+        doorFrequency[doorKey] = { count: 0, carriers: {}, customers: {}, facility: entry._facility };
+      }
+      doorFrequency[doorKey].count++;
+
+      if (entryCarrier) {
+        doorFrequency[doorKey].carriers[entryCarrier] =
+          (doorFrequency[doorKey].carriers[entryCarrier] || 0) + 1;
+      }
+      if (entryCustomer) {
+        doorFrequency[doorKey].customers[entryCustomer] =
+          (doorFrequency[doorKey].customers[entryCustomer] || 0) + 1;
+      }
+
+      if (entryCarrier && entryCustomer) {
+        const comboKey = `${entryCarrier}|${entryCustomer}`;
+        if (!comboStats[comboKey]) {
+          comboStats[comboKey] = {
+            carrier: entryCarrier,
+            customer: entryCustomer,
+            doors: {},
+            total: 0,
+          };
+        }
+        comboStats[comboKey].doors[doorNum] =
+          (comboStats[comboKey].doors[doorNum] || 0) + 1;
+        comboStats[comboKey].total++;
+      }
+    });
+
+    // Create workbook
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Warehouse Dock Board';
+    workbook.created = new Date();
+
+    // Modern color palette
+    const colors = {
+      primary: 'FF2563EB',
+      primaryLight: 'FFDBEAFE',
+      secondary: 'FF059669',
+      secondaryLight: 'FFD1FAE5',
+      accent: 'FF7C3AED',
+      accentLight: 'FFE9D5FF',
+      dark: 'FF1E293B',
+      gray: 'FFF1F5F9',
+      white: 'FFFFFFFF',
+      border: 'FFE2E8F0'
+    };
+
+    // === SHEET 1: Summary ===
+    const summarySheet = workbook.addWorksheet('Summary');
+
+    // Title with gradient-like effect (solid color with styling)
+    summarySheet.mergeCells('A1:D1');
+    summarySheet.getCell('A1').value = 'Position Patterns Export';
+    summarySheet.getCell('A1').font = {
+      size: 20,
+      bold: true,
+      color: { argb: 'FFFFFFFF' }
+    };
+    summarySheet.getCell('A1').fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF2563EB' }
+    };
+    summarySheet.getCell('A1').alignment = {
+      horizontal: 'center',
+      vertical: 'middle'
+    };
+    summarySheet.getRow(1).height = 35;
+
+    // Section header for metadata
+    summarySheet.getCell('A3').value = 'Export Details';
+    summarySheet.getCell('A3').font = {
+      size: 14,
+      bold: true,
+      color: { argb: 'FF1E293B' }
+    };
+    summarySheet.getCell('A3').fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE2E8F0' }
+    };
+    summarySheet.mergeCells('A3:D3');
+
+    // Metadata with modern styling
+    const metaData = [
+      ['Generated', new Date().toLocaleString()],
+      ['Facility Filter', isCombined ? 'all' : facilityIds[0]],
+      ['Carrier Filter', carrier || 'all'],
+      ['Customer Filter', customer || 'all'],
+      ['Direction Filter', direction || 'all'],
+    ];
+
+    metaData.forEach((row, idx) => {
+      const rowNum = 4 + idx;
+      summarySheet.getCell(`A${rowNum}`).value = row[0];
+      summarySheet.getCell(`B${rowNum}`).value = row[1];
+      summarySheet.getCell(`A${rowNum}`).font = { bold: true, color: { argb: 'FF64748B' } };
+      summarySheet.getCell(`B${rowNum}`).font = { color: { argb: 'FF1E293B' } };
+      if (idx % 2 === 0) {
+        summarySheet.getRow(rowNum).fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF8FAFC' }
+        };
+      }
+    });
+
+    // Total placements section
+    summarySheet.getCell('A10').value = 'Total Placements';
+    summarySheet.getCell('A10').font = {
+      size: 14,
+      bold: true,
+      color: { argb: 'FFFFFFFF' }
+    };
+    summarySheet.getCell('A10').fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF059669' }
+    };
+    summarySheet.mergeCells('A10:D10');
+    summarySheet.getCell('A10').alignment = { horizontal: 'center' };
+
+    const totalPlacements = Object.values(doorFrequency).reduce((a, b) => a + b.count, 0);
+    summarySheet.getCell('A11').value = totalPlacements;
+    summarySheet.getCell('A11').font = {
+      size: 24,
+      bold: true,
+      color: { argb: 'FF059669' }
+    };
+    summarySheet.getCell('A11').alignment = { horizontal: 'center', vertical: 'middle' };
+    summarySheet.mergeCells('A11:D11');
+    summarySheet.getRow(11).height = 40;
+
+    // Auto-size columns
+    summarySheet.columns = [
+      { width: 22 },
+      { width: 35 },
+    ];
+    // Helper function to apply zebra striping
+    const applyZebraStriping = (sheet, startRow, endRow) => {
+      const colKeys = sheet.columns.map(col => col.key).filter(Boolean);
+      for (let row = startRow; row <= endRow; row++) {
+        if (row % 2 === 0) {
+          colKeys.forEach(key => {
+            const cell = sheet.getRow(row).getCell(key);
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: colors.gray.replace('FF', '') }
+            };
+          });
+        }
+      }
+    };
+
+    // Helper function to style headers with section colors
+    const styleHeader = (sheet, color) => {
+      const colKeys = sheet.columns.map(col => col.key).filter(Boolean);
+      colKeys.forEach(key => {
+        const cell = sheet.getRow(1).getCell(key);
+        cell.font = {
+          bold: true,
+          color: { argb: 'FFFFFFFF' },
+          size: 11
+        };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: color.replace('FF', '') }
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
+      });
+    };
+
+    // === SHEET 2: Door Statistics (Summary) ===
+    const doorStatsSheet = workbook.addWorksheet('Door Statistics');
+
+    // Get all unique carriers and customers across all doors
+    const allCarriers = new Set();
+    const allCustomers = new Set();
+    Object.values(doorFrequency).forEach(stats => {
+      Object.keys(stats.carriers).forEach(c => allCarriers.add(c));
+      Object.keys(stats.customers).forEach(c => allCustomers.add(c));
+    });
+
+    // Create door stats with separate columns for top 5 carriers and customers
+    const doorStatsData = Object.entries(doorFrequency)
+      .map(([door, stats]) => {
+        const sortedCarriers = Object.entries(stats.carriers).sort((a, b) => b[1] - a[1]);
+        const sortedCustomers = Object.entries(stats.customers).sort((a, b) => b[1] - a[1]);
+
+        const row = {
+          doorNumber: isCombined ? door : parseInt(door),
+          frequency: stats.count,
+        };
+
+        for (let i = 0; i < 5; i++) {
+          if (sortedCarriers[i]) {
+            row[`carrier${i+1}`] = sortedCarriers[i][0];
+            row[`carrier${i+1}Count`] = sortedCarriers[i][1];
+          } else {
+            row[`carrier${i+1}`] = '';
+            row[`carrier${i+1}Count`] = '';
+          }
+        }
+
+        for (let i = 0; i < 5; i++) {
+          if (sortedCustomers[i]) {
+            row[`customer${i+1}`] = sortedCustomers[i][0];
+            row[`customer${i+1}Count`] = sortedCustomers[i][1];
+          } else {
+            row[`customer${i+1}`] = '';
+            row[`customer${i+1}Count`] = '';
+          }
+        }
+
+        return row;
+      })
+      .sort((a, b) => b.frequency - a.frequency);
+
+    if (doorStatsData.length > 0) {
+      const columns = [
+        { header: 'Door', key: 'doorNumber', width: 10 },
+        { header: 'Total', key: 'frequency', width: 9 },
+      ];
+
+      for (let i = 1; i <= 5; i++) {
+        columns.push({ header: `Carrier ${i}`, key: `carrier${i}`, width: 20 });
+        columns.push({ header: `#`, key: `carrier${i}Count`, width: 5 });
+      }
+
+      for (let i = 1; i <= 5; i++) {
+        columns.push({ header: `Customer ${i}`, key: `customer${i}`, width: 20 });
+        columns.push({ header: `#`, key: `customer${i}Count`, width: 5 });
+      }
+
+      doorStatsSheet.columns = columns;
+      doorStatsData.forEach(d => doorStatsSheet.addRow(d));
+
+      styleHeader(doorStatsSheet, colors.primary);
+
+      // Center align the door and total columns
+      doorStatsSheet.getColumn('doorNumber').alignment = { horizontal: 'center' };
+      doorStatsSheet.getColumn('frequency').alignment = { horizontal: 'center' };
+
+      // Center align count columns
+      for (let i = 1; i <= 5; i++) {
+        doorStatsSheet.getColumn(`carrier${i}Count`).alignment = { horizontal: 'center' };
+        doorStatsSheet.getColumn(`customer${i}Count`).alignment = { horizontal: 'center' };
+      }
+
+      applyZebraStriping(doorStatsSheet, 2, doorStatsData.length + 1);
+      doorStatsSheet.views = [{ state: 'frozen', ySplit: 1 }];
+    }
+
+    // === SHEET 3: Carrier-Door Matrix ===
+    const carrierMatrixSheet = workbook.addWorksheet('Carrier-Door Matrix');
+    const sortedCarriers = [...allCarriers].sort();
+    const sortedDoors = Object.entries(doorFrequency)
+      .map(([door]) => isCombined ? door : parseInt(door))
+      .sort((a, b) => {
+        if (typeof a === 'number' && typeof b === 'number') return a - b;
+        return String(a).localeCompare(String(b));
+      });
+
+    if (sortedCarriers.length > 0 && sortedDoors.length > 0) {
+      const headerRow = ['Carrier'];
+      sortedDoors.forEach(door => headerRow.push(String(door)));
+      headerRow.push('Total');
+      carrierMatrixSheet.addRow(headerRow);
+
+      sortedCarriers.forEach(carrierName => {
+        const row = [carrierName];
+        let carrierTotal = 0;
+
+        sortedDoors.forEach(doorKey => {
+          const doorEntry = Object.entries(doorFrequency).find(([k]) =>
+            isCombined ? k === doorKey : parseInt(k) === doorKey
+          );
+          if (doorEntry) {
+            const count = doorEntry[1].carriers[carrierName] || 0;
+            row.push(count || '');
+            carrierTotal += count;
+          } else {
+            row.push('');
+          }
+        });
+
+        row.push(carrierTotal);
+        carrierMatrixSheet.addRow(row);
+      });
+
+      styleHeader(carrierMatrixSheet, colors.secondary);
+
+      // Center all numeric columns
+      sortedDoors.forEach((_, idx) => {
+        carrierMatrixSheet.getColumn(idx + 2).alignment = { horizontal: 'center' };
+      });
+      carrierMatrixSheet.getColumn(sortedDoors.length + 2).alignment = { horizontal: 'center' };
+      carrierMatrixSheet.getColumn(sortedDoors.length + 2).font = { bold: true };
+
+      applyZebraStriping(carrierMatrixSheet, 2, sortedCarriers.length + 1);
+      carrierMatrixSheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
+
+      carrierMatrixSheet.columns.forEach((col, idx) => {
+        col.width = idx === 0 ? 22 : 7;
+      });
+    }
+
+    // === SHEET 4: Customer-Door Matrix ===
+    const customerMatrixSheet = workbook.addWorksheet('Customer-Door Matrix');
+    const sortedCustomers = [...allCustomers].sort();
+
+    if (sortedCustomers.length > 0 && sortedDoors.length > 0) {
+      const headerRow = ['Customer'];
+      sortedDoors.forEach(door => headerRow.push(String(door)));
+      headerRow.push('Total');
+      customerMatrixSheet.addRow(headerRow);
+
+      sortedCustomers.forEach(customerName => {
+        const row = [customerName];
+        let customerTotal = 0;
+
+        sortedDoors.forEach(doorKey => {
+          const doorEntry = Object.entries(doorFrequency).find(([k]) =>
+            isCombined ? k === doorKey : parseInt(k) === doorKey
+          );
+          if (doorEntry) {
+            const count = doorEntry[1].customers[customerName] || 0;
+            row.push(count || '');
+            customerTotal += count;
+          } else {
+            row.push('');
+          }
+        });
+
+        row.push(customerTotal);
+        customerMatrixSheet.addRow(row);
+      });
+
+      styleHeader(customerMatrixSheet, colors.accent);
+
+      // Center all numeric columns
+      sortedDoors.forEach((_, idx) => {
+        customerMatrixSheet.getColumn(idx + 2).alignment = { horizontal: 'center' };
+      });
+      customerMatrixSheet.getColumn(sortedDoors.length + 2).alignment = { horizontal: 'center' };
+      customerMatrixSheet.getColumn(sortedDoors.length + 2).font = { bold: true };
+
+      applyZebraStriping(customerMatrixSheet, 2, sortedCustomers.length + 1);
+      customerMatrixSheet.views = [{ state: 'frozen', xSplit: 1, ySplit: 1 }];
+
+      customerMatrixSheet.columns.forEach((col, idx) => {
+        col.width = idx === 0 ? 25 : 7;
+      });
+    }
+
+    // === SHEET 5: Top Carrier-Customer Combinations ===
+    const combosSheet = workbook.addWorksheet('Top Combinations');
+    const topCombos = Object.values(comboStats)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 20)
+      .map((c) => ({
+        carrier: c.carrier,
+        customer: c.customer,
+        total: c.total,
+        preferredDoors: Object.entries(c.doors)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([door, count]) => `Door ${door} (${count})`)
+          .join(', ') || 'N/A',
+      }));
+
+    if (topCombos.length > 0) {
+      combosSheet.columns = [
+        { header: 'Carrier', key: 'carrier', width: 22 },
+        { header: 'Customer', key: 'customer', width: 22 },
+        { header: 'Total', key: 'total', width: 10 },
+        { header: 'Preferred Doors', key: 'preferredDoors', width: 45 },
+      ];
+
+      topCombos.forEach(c => combosSheet.addRow(c));
+
+      styleHeader(combosSheet, colors.dark);
+
+      // Center align total column
+      combosSheet.getColumn('total').alignment = { horizontal: 'center' };
+
+      applyZebraStriping(combosSheet, 2, topCombos.length + 1);
+    }
+
+    // Generate filename - prefix with facilityId or 'all'
+    const facilityLabel = isCombined ? 'all' : facilityIds[0];
+    const filename = `${facilityLabel}-patterns-${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Write to buffer and send
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Patterns export error:', error);
     res.status(500).json({ error: error.message });
   }
 });
