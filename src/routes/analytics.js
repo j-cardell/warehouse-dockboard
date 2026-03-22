@@ -25,10 +25,10 @@ const {
   loadHistory,
   saveSettings,
   addHistoryEntry,
+  saveAnalytics,
 } = require("../state");
 const {
   loadAnalytics,
-  saveAnalytics,
   getDwellViolations,
   recordDwellSnapshot,
   calculateDailyDwell,

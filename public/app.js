@@ -2356,7 +2356,6 @@ async function showAnalyticsModal() {
         ${editMode ? `<button class="btn btn-success" id="btn-capture-now">📸 Force Calculation</button>
         <button class="btn btn-primary" id="btn-refresh-analytics">🔄 Refresh</button>` : ''}
         <button class="btn btn-secondary" id="btn-export-analytics" data-view="violations">📥 Export Excel</button>
-        ${editMode ? `<button class="btn btn-danger" id="btn-clear-analytics">🗑️ Clear All History</button>` : ''}
         <button class="btn btn-secondary close-modal">Close</button>
       </div>
     </div>
@@ -3063,8 +3062,17 @@ async function showAnalyticsModal() {
     }
   }
 
-  // Refresh handler
-  document.getElementById('btn-refresh-analytics')?.addEventListener('click', () => {
+  // Refresh handler - now forces recalculation in edit mode
+  document.getElementById('btn-refresh-analytics')?.addEventListener('click', async () => {
+    if (editMode) {
+      try {
+        await apiCall('/analytics/snapshot', 'POST');
+        showToast('Analytics recalculated', 'success');
+      } catch (error) {
+        showToast('Error: ' + error.message, 'error');
+      }
+    }
+
     if (currentView === 'violations') {
       loadViolations();
     } else if (currentView === 'patterns') {
@@ -3458,35 +3466,7 @@ function renderPatternsHeatmap(doorStats) {
       showToast('Error: ' + error.message, 'error');
     }
   });
-  
-  // Clear analytics handler (edit mode only)
-  document.getElementById('btn-clear-analytics')?.addEventListener('click', async () => {
-    if (currentView === 'patterns') {
-      if (!await showConfirmModal({ title: 'Reset Analytics', html: '<div style="text-align: left;"><p style="color: var(--text-secondary); margin: 0 0 0.75rem 0;">This will reset the analytics start date to <strong>NOW</strong>.</p><p style="color: var(--text-muted); margin: 0; font-size: 0.875rem;">Older pattern data will be hidden but not deleted.</p></div>', type: 'warning', confirmText: 'Reset', cancelText: 'Cancel' })) return;
-      
-      try {
-        await apiCall('/analytics?mode=reset_start_date', 'DELETE');
-        showToast('Pattern data reset (start date updated)', 'success');
-        loadPatterns();
-      } catch (error) {
-        showToast('Error: ' + error.message, 'error');
-      }
-      return;
-    }
-    
-    // Default behavior for other tabs
-    if (!await showConfirmModal({ title: 'Clear Analytics', html: '<div style="text-align: left;"><p style="color: #ef4444; margin: 0 0 0.75rem 0; font-weight: 500;">⚠️ WARNING: This will permanently delete ALL analytics history!</p><p style="color: var(--text-muted); margin: 0; font-size: 0.875rem;">This action cannot be undone.</p></div>', type: 'danger', confirmText: 'Clear', cancelText: 'Cancel' })) return;
-    if (!await showConfirmModal({ title: 'Confirm Clear', html: '<p style="color: var(--text-secondary); margin: 0;">Are you absolutely sure? All daily dwell aggregates will be lost.</p>', type: 'danger', confirmText: 'Clear All', cancelText: 'Cancel' })) return;
-    
-    try {
-      await apiCall('/analytics', 'DELETE');
-      showToast('Analytics history cleared', 'success');
-      setTimeout(() => loadAnalytics(currentPeriod), 500);
-    } catch (error) {
-      showToast('Error: ' + error.message, 'error');
-    }
-  });
-  
+
   // Close handlers
   modal.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', () => modal.remove());

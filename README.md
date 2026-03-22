@@ -318,7 +318,7 @@ Click "Edit" button to enable configuration changes:
 | Auth | JWT with Basic auth fallback |
 | Real-Time | Server-Sent Events (SSE) |
 
-**Why JSON files?** No database server to configure, backup, or manage. Data is human-readable, portable, and stored directly in the filesystem. Simply copy the `data/` directory to migrate or archive. Perfect for single-facility deployments where simplicity and minimal infrastructure matters more than concurrent access patterns.
+**Why JSON files?** No database server to configure, backup, or manage. Data is human-readable, portable, and stored directly in the filesystem. Simply copy the `data/` directory to migrate or archive. Perfect for single-facility deployments and *now* small, multi-facility deploymentswhere simplicity and minimal infrastructure matters more than concurrent access patterns.
 
 ### File Structure
 
