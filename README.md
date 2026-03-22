@@ -5,6 +5,7 @@ A real-time dock management application for warehouses, distribution centers, an
 > **Note:** This tool complements existing warehouse management systems (SAP, WMS, ERP) **it does not replace them**. It provides quick visual access to dock operations without navigating complex enterprise systems. Data accuracy depends entirely on user input. Always verify critical information in your official systems.
 
 ---
+<img width="2322" height="1365" alt="image" src="https://github.com/user-attachments/assets/52d2bbbc-e3e3-45ba-bcb0-e97e7b013de4" />
 
 ## Table of Contents
 
@@ -206,12 +207,18 @@ The server will refuse to start if:
 ### Loader Tablet Interface (WIP)
 
 A simplified interface at `/loader.html` for forklift operators to quickly update trailer status without accessing the full dashboard.
+<img width="603" height="669" alt="image" src="https://github.com/user-attachments/assets/9b51bc2a-3d9c-410d-950d-b423ffabf76e" />
 
 **Current Implementation:**
 1. **Create Tablet User** (Admin): In User Management, create a user with "tablet" role. Since this is WIP, use the facility ID as the username. Currently, this is how the facility is identified. Future state, create full Loader users with their own username and hashed password to log into the tablet with. This is set up as if each facility is using a shared device.
 2. **Create Loaders** (Admin): Create users with "loader" role - these only need names (no passwords) and appear in the loader selection list after logging in with the tablet user assigned to the facility. This populates the correct users per facility.
 3. **Access**: Loaders go to `/loader.html`, enter the tablet username to select the facility, enter the pin set by the creating admin, then select their name from the loader list.
+<img width="627" height="297" alt="image" src="https://github.com/user-attachments/assets/3066a34c-d2fd-4182-b2f4-b9935d16278f" />
+
 4. **Status Updates**: Loaders enter the door number, confirm the carrier/trailer number. The loader is then shown any notes added to the load. After dismissing the notes, they are displayed 3 buttons. Empty/Loaded and either Shipped (if an outbound load) or Received (if an inbound load). Any of the selections will update the door grid accordingly. It will mark a loaded trailer empty, an empty trailer loaded, mark a trailer as loaded and shipped, mark a trailer as empty and received. 
+<img width="616" height="590" alt="image" src="https://github.com/user-attachments/assets/dd072be3-9c3f-4db6-af98-8aee1065fe7f" />
+
+<img width="624" height="594" alt="image" src="https://github.com/user-attachments/assets/4b106733-d63e-446d-a1f4-9bc15948477a" />
 
 **Note:** To repeat, this is currently designed for shared tablet scenarios. Future versions will support individual devices with distinct user credentials.
 
