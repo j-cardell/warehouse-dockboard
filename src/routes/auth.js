@@ -43,6 +43,18 @@ router.post("/login", loginLimiter, async (req, res) => {
     });
   }
 
+  // Track start time for consistent response timing
+  const startTime = Date.now();
+  const minResponseTime = 50; // Minimum response time in ms
+
+  // Helper to ensure consistent response timing
+  const ensureMinResponseTime = async () => {
+    const elapsed = Date.now() - startTime;
+    if (elapsed < minResponseTime) {
+      await new Promise(resolve => setTimeout(resolve, minResponseTime - elapsed + Math.random() * 20));
+    }
+  };
+
   // Bootstrap mode: No users exist yet
   // Allow first login with AUTH_USER/AUTH_PASS to auto-create admin
   if (!hasUsers()) {

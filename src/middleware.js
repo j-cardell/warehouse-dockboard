@@ -79,6 +79,7 @@ function generateToken(user) {
       role: user.role,
       homeFacility: user.homeFacility,
       currentFacility: user.currentFacility,
+      iat: Math.floor(Date.now() / 1000), // Issued at timestamp
     },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
@@ -109,6 +110,35 @@ async function requireAuth(req, res, next) {
     const token = authHeader.substring(7);
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
+
+      // Check token staleness - if user was modified after token was issued, reject
+      if (decoded.iat && decoded.userId) {
+        const { findUserById, findGlobalUserById } = require("./users");
+        let user = null;
+
+        if (MULTI_FACILITY_MODE) {
+          // Check facility-specific users first, then global users
+          const facilityId = decoded.homeFacility || decoded.currentFacility || DEFAULT_FACILITY_ID;
+          user = findUserById(decoded.userId, facilityId);
+          if (!user) {
+            user = findGlobalUserById(decoded.userId);
+          }
+        } else {
+          user = findUserById(decoded.userId);
+        }
+
+        if (user && user.updatedAt) {
+          const tokenIssuedAt = decoded.iat * 1000; // Convert seconds to milliseconds
+          const userUpdatedAt = new Date(user.updatedAt).getTime();
+          if (userUpdatedAt > tokenIssuedAt) {
+            return res.status(401).json({
+              error: "Token revoked - user credentials changed",
+              code: "TOKEN_REVOKED",
+            });
+          }
+        }
+      }
+
       req.user = {
         userId: decoded.userId,
         username: decoded.username,

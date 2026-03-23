@@ -232,14 +232,20 @@ router.put("/:id", requireAuth, requireRole("user"), (req, res) => {
 
   // Dwell reset: track in dwellResets array
   if (updates.createdAt) {
-    if (updates.createdAt !== trailer.createdAt) {
+    // Validate createdAt is a valid date
+    const parsed = Date.parse(updates.createdAt);
+    if (isNaN(parsed)) {
+      return res.status(400).json({ error: "Invalid createdAt date" });
+    }
+    const normalizedDate = new Date(parsed).toISOString();
+    if (normalizedDate !== trailer.createdAt) {
       if (!trailer.dwellResets) trailer.dwellResets = [];
       trailer.dwellResets.push(new Date().toISOString());
       if (trailer.dwellResets.length > 10) {
         trailer.dwellResets = trailer.dwellResets.slice(-10);
       }
     }
-    trailer.createdAt = updates.createdAt;
+    trailer.createdAt = normalizedDate;
   }
 
   if (updates.loadNumber !== undefined && updates.loadNumber !== trailer.loadNumber) {

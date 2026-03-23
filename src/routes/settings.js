@@ -18,11 +18,25 @@ router.get("/", (req, res) => {
   res.json(settings);
 });
 
+// Allowed settings keys for whitelist validation
+const ALLOWED_SETTINGS_KEYS = ['trailerDisplay', 'sidebarLayout'];
+
 // Update global settings (protected)
 router.post("/", requireAuth, requireRole("user"), (req, res) => {
   const facilityId = req.user.currentFacility || req.user.homeFacility || DEFAULT_FACILITY_ID;
   const currentSettings = loadSettings(facilityId);
-  const newSettings = { ...currentSettings, ...req.body };
+
+  // Prototype pollution protection
+  if (req.body && (req.body.__proto__ || req.body.constructor)) {
+    return res.status(400).json({ error: "Invalid key in request body" });
+  }
+
+  // Whitelist validation: only allow known settings keys
+  const updates = Object.fromEntries(
+    Object.entries(req.body).filter(([key]) => ALLOWED_SETTINGS_KEYS.includes(key))
+  );
+
+  const newSettings = { ...currentSettings, ...updates };
   saveSettings(newSettings, facilityId);
   res.json({ success: true, settings: newSettings });
 });

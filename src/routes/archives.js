@@ -743,6 +743,13 @@ router.post("/restore", requireAuth, requireRole("admin"), async (req, res) => {
     const stateData = { ...data };
     delete stateData._archiveMetadata;
 
+    // Validate only expected top-level keys are present
+    const allowedKeys = ['doors', 'trailers', 'yardTrailers', 'yardSlots', 'staging', 'queuedTrailers', 'appointmentQueue', 'carriers', 'shippedTrailers', 'receivedTrailers'];
+    const extraKeys = Object.keys(stateData).filter(k => !allowedKeys.includes(k));
+    if (extraKeys.length > 0) {
+      return res.status(400).json({ error: `Unexpected keys in archive: ${extraKeys.join(', ')}` });
+    }
+
     // Validate structure
     const validation = validateArchiveData(stateData);
     if (!validation.valid) {

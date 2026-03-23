@@ -90,6 +90,7 @@ function loadState(facilityId = DEFAULT_FACILITY_ID) {
 
 /**
  * Save state for a specific facility.
+ * Uses atomic write (temp file + rename) to prevent race conditions.
  */
 function saveState(state, facilityId = DEFAULT_FACILITY_ID) {
   const stateFile = MULTI_FACILITY_MODE
@@ -104,7 +105,10 @@ function saveState(state, facilityId = DEFAULT_FACILITY_ID) {
     }
   }
 
-  fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+  // Atomic write: write to temp file then rename
+  const tmpFile = stateFile + '.tmp';
+  fs.writeFileSync(tmpFile, JSON.stringify(state, null, 2));
+  fs.renameSync(tmpFile, stateFile);
 }
 
 /**
@@ -141,7 +145,10 @@ function saveHistory(history, facilityId = DEFAULT_FACILITY_ID) {
     }
   }
 
-  fs.writeFileSync(historyFile, JSON.stringify(history, null, 2));
+  // Atomic write: write to temp file then rename
+  const tmpFile = historyFile + '.tmp';
+  fs.writeFileSync(tmpFile, JSON.stringify(history, null, 2));
+  fs.renameSync(tmpFile, historyFile);
 }
 
 /**
@@ -217,7 +224,10 @@ function saveAnalytics(analytics, facilityId = DEFAULT_FACILITY_ID) {
     }
   }
 
-  fs.writeFileSync(analyticsFile, JSON.stringify(analytics, null, 2));
+  // Atomic write: write to temp file then rename
+  const tmpFile = analyticsFile + '.tmp';
+  fs.writeFileSync(tmpFile, JSON.stringify(analytics, null, 2));
+  fs.renameSync(tmpFile, analyticsFile);
 }
 
 /**
@@ -252,7 +262,10 @@ function saveSettings(settings, facilityId = DEFAULT_FACILITY_ID) {
     }
   }
 
-  fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2));
+  // Atomic write: write to temp file then rename
+  const tmpFile = settingsFile + '.tmp';
+  fs.writeFileSync(tmpFile, JSON.stringify(settings, null, 2));
+  fs.renameSync(tmpFile, settingsFile);
 }
 
 /**
