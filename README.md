@@ -461,7 +461,7 @@ The server is organized into modules:
   "loadNumber": "LD1234567",
   "driverName": "John Smith",
   "driverPhone": "555-1234",
-  "contents": "Electronics",
+  "notes": "Electronics - handle with care",
   "appointmentTime": "14:30",
   "isLive": true,
   "location": "door",
@@ -480,6 +480,8 @@ The server is organized into modules:
 }
 ```
 
+**Notes:** The `notes` field (also referred to as `contents` in some contexts) stores free-form information about the trailer load.
+
 **Direction:** `outbound` (default) | `inbound`
 - **Outbound**: Empty → Loaded → Shipped (amber → green)
 - **Inbound**: Loaded → Empty → Received (blue → light blue)
@@ -491,10 +493,12 @@ The server is organized into modules:
   "id": "uuid",
   "number": "TR67890",
   "carrier": "UPS",
+  "direction": "outbound",
   "status": "empty",
   "location": "yard",
   "yardSlotId": "yard-5",
   "yardSlotNumber": 5,
+  "notes": "Waiting for door assignment",
   "createdAt": "2026-01-01T00:00:00Z",
   "dwellResets": []
 }
@@ -507,12 +511,14 @@ The server is organized into modules:
   "id": "uuid",
   "number": "TR11111",
   "carrier": "Amazon",
+  "direction": "outbound",
   "status": "loaded",
   "location": "queued",
   "targetDoorId": "door-5",
   "targetDoorNumber": 5,
   "queuedAt": "2026-01-01T10:00:00Z",
-  "isLive": true
+  "isLive": true,
+  "notes": "Scheduled for 10:30"
 }
 ```
 
@@ -538,9 +544,12 @@ The server is organized into modules:
   "id": "uuid",
   "number": "TR33333",
   "carrier": "Target",
+  "direction": "outbound",
   "status": "shipped",
+  "loadNumber": "LD7654321",
   "shippedAt": "2026-01-01T18:00:00Z",
   "previousLocation": "Door 12",
+  "notes": "Shipped complete",
   "createdAt": "2026-01-01T00:00:00Z"
 }
 ```
@@ -552,9 +561,12 @@ The server is organized into modules:
   "id": "uuid",
   "number": "TR44444",
   "carrier": "Walmart",
+  "direction": "inbound",
   "status": "received",
+  "loadNumber": "LD9876543",
   "receivedAt": "2026-01-01T18:00:00Z",
   "previousLocation": "Door 8",
+  "notes": "Received complete",
   "createdAt": "2026-01-01T00:00:00Z"
 }
 ```
@@ -565,7 +577,6 @@ The server is organized into modules:
 {
   "id": "uuid",
   "name": "FedEx",
-  "mcNumber": "MC123456",
   "favorite": true,
   "usageCount": 42,
   "createdAt": "2026-01-01T00:00:00Z"
@@ -601,7 +612,7 @@ The server is organized into modules:
   "role": "admin",
   "authType": "local",
   "active": true,
-  "homeFacility": "facility-uuid",
+  "homeFacility": "facility-123",
   "createdAt": "2026-01-01T00:00:00Z",
   "lastLogin": "2026-01-01T12:00:00Z",
   "isBootstrap": true
@@ -612,7 +623,7 @@ The server is organized into modules:
 
 ```json
 {
-  "id": "facility-uuid",
+  "id": "facility-123",
   "name": "Main Warehouse",
   "description": "Primary facility",
   "createdAt": "2026-01-01T00:00:00Z",

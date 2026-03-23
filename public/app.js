@@ -5803,12 +5803,17 @@ function setupModals() {
   document.getElementById('quick-add-direction')?.addEventListener('change', (e) => {
     const label = document.getElementById('quick-direction-label');
     const toggle = e.target;
+    const isLiveCheckbox = document.getElementById('quick-add-live');
+
     if (label) {
       label.textContent = toggle.checked ? '⬇️ Inbound' : '⬆️ Outbound';
     }
+
     // Add/remove blue styling for inbound
     if (toggle.checked) {
       toggle.closest('.switch-container')?.classList.add('inbound-toggle');
+      // Inbound trailers are live by default
+      if (isLiveCheckbox) isLiveCheckbox.checked = true;
     } else {
       toggle.closest('.switch-container')?.classList.remove('inbound-toggle');
     }
