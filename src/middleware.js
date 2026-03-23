@@ -68,7 +68,7 @@ const loginLimiter = (req, res, next) => {
  * Generate a JWT token for the given user.
  * Token expires based on JWT_EXPIRES_IN env var (default: 24h).
  *
- * @param {object} user - User object with id, username, role, email, homeFacility, currentFacility
+ * @param {object} user - User object with id, username, role, homeFacility, currentFacility
  * @returns {string} - Signed JWT token
  */
 function generateToken(user) {
@@ -77,7 +77,6 @@ function generateToken(user) {
       userId: user.id,
       username: user.username,
       role: user.role,
-      email: user.email,
       homeFacility: user.homeFacility,
       currentFacility: user.currentFacility,
     },
@@ -114,7 +113,6 @@ async function requireAuth(req, res, next) {
         userId: decoded.userId,
         username: decoded.username,
         role: decoded.role,
-        email: decoded.email,
         homeFacility: decoded.homeFacility,
         currentFacility: decoded.currentFacility,
         isVisiting: decoded.isVisiting || false,
@@ -154,7 +152,6 @@ async function requireAuth(req, res, next) {
           userId: user.id,
           username: user.username,
           role: user.role,
-          email: user.email,
           homeFacility: user.homeFacility || facilityId,
           currentFacility: facilityId,
           isVisiting: false,

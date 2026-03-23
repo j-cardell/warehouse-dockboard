@@ -259,7 +259,7 @@ Admins manage users through the user menu (top right) → "Manage Users":
 
 **Creating Users:**
 1. Click "Add User"
-2. Enter username, email (optional), select role (admin/user/viewer)
+2. Enter username, select role (admin/user/viewer/loader/loading-tablet)
 3. Admin creates a temporary password
 4. Share credentials with user
 
@@ -333,6 +333,7 @@ warehouse-dockboard/
 │   ├── analytics.js            # Dwell time calculations
 │   ├── sse.js                  # Server-Sent Events handler
 │   ├── facilities.js           # Multi-facility management
+│   ├── users.js                # User management (bcrypt, roles)
 │   └── routes/                 # API routes (modular)
 │       ├── auth.js             # Authentication endpoints
 │       ├── users.js            # User CRUD
@@ -388,13 +389,14 @@ warehouse-dockboard/
 
 The server is organized into modules:
 
-- **config.js** - Centralized configuration constants, file paths, multi-facility flag
-- **state.js** - JSON file persistence layer with load/save helpers
-- **utils.js** - Shared utility functions (sanitizeInput, uuid)
-- **middleware.js** - Express middleware (auth, rate limiting, headers)
-- **analytics.js** - Dwell time calculations and statistics
-- **sse.js** - Real-time updates via Server-Sent Events
-- **facilities.js** - Multi-facility data organization
+- **config.js** - Centralized configuration constants, file paths, multi-facility flag, dynamic path generators for per-facility data
+- **state.js** - JSON file persistence layer with load/save helpers for state, history, analytics, and settings
+- **utils.js** - Shared utility functions (sanitizeInput, uuid), setup checking, and facility config generation
+- **middleware.js** - Express middleware (auth, rate limiting, headers, JWT generation, role-based access control)
+- **analytics.js** - Dwell time calculations, statistics, dwell resets, and violation tracking
+- **sse.js** - Real-time updates via Server-Sent Events with facility-filtered broadcasts and toast notifications
+- **facilities.js** - Multi-facility data organization with full CRUD operations and facility stats
+- **users.js** - User management with bcrypt password hashing, role validation, and multi-facility user support
 - **routes/** - API endpoints organized by domain
 
 ### Authentication Flow
@@ -402,12 +404,14 @@ The server is organized into modules:
 1. **Bootstrap Mode**: If no users exist, first login with `AUTH_USER/AUTH_PASS` auto-creates an admin user
 2. **Normal Login**: Credentials verified against `users.json` (hashed with bcrypt)
 3. **Password Reset Flow**: Admin can trigger reset; user must verify temp password, then set new password
-4. **Token Generation**: JWT contains userId, username, role, homeFacility, currentFacility, isVisiting flag
+4. **Token Generation**: JWT contains userId, username, role, homeFacility, currentFacility, isVisiting flag (isVisiting is set when admin switches away from home facility)
 5. **Token Validation**: `requireAuth` middleware validates Bearer tokens on protected routes
 
 **Role Hierarchy:**
 - `viewer` (0) - Read-only access
 - `user` (1) - Standard operations
+- `loader` (1) - Forklift operator (tablet interface, no password, selects name from list)
+- `loading-tablet` (1) - Shared tablet device (6-digit PIN login, identifies facility for loaders)
 - `admin` (2) - Full access including user management and facility switching
 
 ### Real-Time Updates (SSE)
@@ -420,6 +424,7 @@ The server is organized into modules:
 
 **Events:**
 - `stateChange` - Entity changes (trailer, door, carrier, yard, queue)
+- `toast` - Notifications for loader actions (ship/receive events)
 - `heartbeat` - Connection keepalive
 
 **Fallback:** If SSE fails, automatic polling every 5 seconds
@@ -608,7 +613,6 @@ The server is organized into modules:
   "id": "uuid",
   "username": "dockadmin",
   "passwordHash": "$2b$10$...",
-  "email": "admin@example.com",
   "role": "admin",
   "authType": "local",
   "active": true,

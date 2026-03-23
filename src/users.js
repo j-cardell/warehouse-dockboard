@@ -452,10 +452,6 @@ async function updateGlobalUser(userId, updates) {
     user.passwordHash = await hashPassword(updates.password);
   }
 
-  if (updates.email !== undefined) {
-    user.email = updates.email;
-  }
-
   user.updatedAt = new Date().toISOString();
 
   if (!saveGlobalUsers(usersData)) {
@@ -498,10 +494,6 @@ async function updateGlobalUser(userId, updates) {
       return { success: false, error: "Password must be at least 8 characters" };
     }
     user.passwordHash = await hashPassword(updates.password);
-  }
-
-  if (updates.email !== undefined) {
-    user.email = updates.email;
   }
 
   user.updatedAt = new Date().toISOString();
@@ -608,7 +600,6 @@ async function createInitialAdmin(username, password, facilityId = DEFAULT_FACIL
       id: uuidv4(),
       username,
       passwordHash,
-      email: null,
       role: "admin",
       authType: "local",
       active: true,
@@ -629,7 +620,6 @@ async function createInitialAdmin(username, password, facilityId = DEFAULT_FACIL
   return createUser({
     username,
     password,
-    email: null,
     role: "admin",
   }, facilityId);
 }
