@@ -332,7 +332,7 @@ router.get("/status", (req, res) => {
 
   const token = authHeader.substring(7);
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     // Verify user still exists in database (not deleted)
     // First check in facility-specific users, then in global users for bootstrap
     let user = null;
@@ -471,7 +471,7 @@ router.post("/set-new-password", async (req, res) => {
 
   try {
     // Verify the token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
 
     // Must be a password reset token
     if (!decoded.passwordReset) {

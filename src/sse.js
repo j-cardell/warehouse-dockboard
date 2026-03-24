@@ -28,7 +28,7 @@ function validateToken(authHeader, queryToken) {
   if (!token) return null;
 
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
   } catch (err) {
     return null;
   }

@@ -74,6 +74,19 @@ app.disable("x-powered-by");
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
+// Security headers middleware
+app.use((req, res, next) => {
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  // Prevent MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // Control referrer information
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Content Security Policy
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  next();
+});
+
 // Ensure data directories exist
 ensureDataDirs(DATA_DIR);
 
@@ -214,7 +227,7 @@ app.use((req, res, next) => {
     try {
       const jwt = require("jsonwebtoken");
       const { JWT_SECRET } = require("./config");
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
       if (decoded.role === "loader" || decoded.role === "loading-tablet") {
         // Loader or loading-tablet trying to access main app - redirect to loader interface
         return res.redirect("/loader");

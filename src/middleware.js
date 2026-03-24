@@ -109,7 +109,7 @@ async function requireAuth(req, res, next) {
   if (authHeader.startsWith("Bearer ")) {
     const token = authHeader.substring(7);
     try {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
 
       // Check token staleness - if user was modified after token was issued, reject
       if (decoded.iat && decoded.userId) {

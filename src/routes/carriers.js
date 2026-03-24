@@ -14,9 +14,9 @@ const { broadcastStateChange } = require("../sse");
 const { loadState, saveState, addHistoryEntry } = require("../state");
 const { sanitizeInput } = require("../utils");
 
-// Get all carriers (public - needed for carrier dropdown)
-router.get("/", (req, res) => {
-  const facilityId = req.user?.currentFacility || req.query.facilityId;
+// Get all carriers (requires authentication)
+router.get("/", requireAuth, (req, res) => {
+  const facilityId = req.user?.currentFacility || req.user?.homeFacility;
   const state = loadState(facilityId);
   res.json({ carriers: state.carriers || [] });
 });

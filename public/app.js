@@ -1774,12 +1774,12 @@ function showSearchResultsModal() {
     return `
       <div class="search-result-item" data-trailer-id="${t.id}" data-type="active">
         <div class="search-result-main">
-          <span class="search-carrier">${t.carrier}</span>
-          ${t.customer ? `<span class="search-customer">(${t.customer})</span>` : ''}
+          <span class="search-carrier">${escapeHtml(t.carrier)}</span>
+          ${t.customer ? `<span class="search-customer">(${escapeHtml(t.customer)})</span>` : ''}
         </div>
         <div class="search-result-details">
-          <span class="search-detail" title="Trailer Number">🚛 ${t.number || '-'}</span>
-          <span class="search-detail" title="Load Number">📦 ${t.loadNumber || '-'}</span>
+          <span class="search-detail" title="Trailer Number">🚛 ${t.number ? escapeHtml(t.number) : '-'}</span>
+          <span class="search-detail" title="Load Number">📦 ${t.loadNumber ? escapeHtml(t.loadNumber) : '-'}</span>
           <span class="search-detail" title="Dwell Time">⏱️ ${dwellText}</span>
           <span class="search-detail search-location" title="Location">📍 ${locationText}</span>
         </div>
@@ -1797,13 +1797,13 @@ function showSearchResultsModal() {
     return `
       <div class="search-result-item shipped-result" data-trailer-id="${t.id}" data-type="shipped">
         <div class="search-result-main">
-          <span class="search-carrier">${t.carrier}</span>
-          ${t.customer ? `<span class="search-customer">(${t.customer})</span>` : ''}
+          <span class="search-carrier">${escapeHtml(t.carrier)}</span>
+          ${t.customer ? `<span class="search-customer">(${escapeHtml(t.customer)})</span>` : ''}
           <span class="shipped-badge">📦 SHIPPED</span>
         </div>
         <div class="search-result-details">
-          <span class="search-detail" title="Trailer Number">🚛 ${t.number || '-'}</span>
-          <span class="search-detail" title="Load Number">📦 ${t.loadNumber || '-'}</span>
+          <span class="search-detail" title="Trailer Number">🚛 ${t.number ? escapeHtml(t.number) : '-'}</span>
+          <span class="search-detail" title="Load Number">📦 ${t.loadNumber ? escapeHtml(t.loadNumber) : '-'}</span>
           <span class="search-detail" title="Shipped Date">📅 ${shippedAt}</span>
           <span class="search-detail" title="Previous Location">📍 Was: ${prevLoc}</span>
         </div>
@@ -2630,13 +2630,13 @@ async function showAnalyticsModal() {
         list.innerHTML = currentData.trailers.map(t => `
           <div class="violation-item" data-trailer-id="${t.id}">
             <div class="violation-main">
-              <span class="violation-carrier">${t.carrier}</span>
-              ${t.number ? `<span class="violation-number">${t.number}</span>` : ''}
-              <span class="violation-location">${t.facility ? `[${t.facility}] ` : ''}Door ${t.doorNumber || '?'}</span>
+              <span class="violation-carrier">${escapeHtml(t.carrier)}</span>
+              ${t.number ? `<span class="violation-number">${escapeHtml(t.number)}</span>` : ''}
+              <span class="violation-location">${t.facility ? `[${escapeHtml(t.facility)}] ` : ''}Door ${t.doorNumber || '?'}</span>
             </div>
             <div class="violation-meta">
               <span class="violation-dwell ${t.dwellHours >= 3 ? 'critical' : 'warning'}">${t.dwellHours.toFixed(1)}h</span>
-              ${t.customer ? `<span class="violation-customer">${t.customer}</span>` : ''}
+              ${t.customer ? `<span class="violation-customer">${escapeHtml(t.customer)}</span>` : ''}
             </div>
           </div>
         `).join('');
@@ -4013,14 +4013,14 @@ function renderDoors() {
             ${hasTextLabel ? `<span class="door-text-label ${door.labelText.length > 6 ? 'long-label' : ''}">${door.labelText}</span>` : ''}
             <div class="trailer-card docked ${trailer.status} ${selectedClass} ${dwellClass} ${liveClass}" draggable="true" data-trailer-id="${trailer.id}" data-location="door-${doorNum}">
               <div class="trailer-header-row">
-                ${trailer.number ? `<span class="trailer-number">${trailer.number}</span>` : ''}
+                ${trailer.number ? `<span class="trailer-number">${escapeHtml(trailer.number)}</span>` : ''}
                 ${dwellBadge}
                 ${editMode ? `<button class="delete-trailer-btn" data-trailer-id="${trailer.id}" title="Delete trailer">🗑️</button>` : ''}
               </div>
-              ${trailer.customer ? `<div class="trailer-customer">${trailer.customer}</div>` : ''}
-              ${trailer.driverName ? `<div class="trailer-driver">${trailer.driverName}</div>` : ''}
-              <div class="trailer-carrier">${trailer.carrier}</div>
-              ${trailer.loadNumber ? `<div class="trailer-load-number-row">${trailer.loadNumber}</div>` : ''}
+              ${trailer.customer ? `<div class="trailer-customer">${escapeHtml(trailer.customer)}</div>` : ''}
+              ${trailer.driverName ? `<div class="trailer-driver">${escapeHtml(trailer.driverName)}</div>` : ''}
+              <div class="trailer-carrier">${escapeHtml(trailer.carrier)}</div>
+              ${trailer.loadNumber ? `<div class="trailer-load-number-row">${escapeHtml(trailer.loadNumber)}</div>` : ''}
             </div>
           </div>
           ${editMode ? `<button class="door-edit-btn" data-door-id="${door.id}" style="opacity: 1">⚙️</button>` : ''}
@@ -4250,22 +4250,21 @@ function renderStaging() {
   
   // Build info row - trailer number and load number
   let infoItems = [];
-  if (trailer.number) infoItems.push(`<span class="trailer-number">${trailer.number}</span>`);
-  if (trailer.loadNumber) infoItems.push(`<span class="trailer-load-number">Load: ${trailer.loadNumber}</span>`);
+  if (trailer.number) infoItems.push(`<span class="trailer-number">${escapeHtml(trailer.number)}</span>`);
+  if (trailer.loadNumber) infoItems.push(`<span class="trailer-load-number">Load: ${escapeHtml(trailer.loadNumber)}</span>`);
   const infoRow = infoItems.length > 0 ? `<div class="yard-trailer-info">${infoItems.join('')}</div>` : '';
-  
-  // Build driver and customer rows
-  // Backend encodes entities, so text can be inserted directly without additional escaping
-  const customerRow = trailer.customer ? `<div class="yard-trailer-customer">${trailer.customer}</div>` : '';
-  const driverRow = trailer.driverName ? `<div class="yard-trailer-driver">${trailer.driverName}</div>` : '';
-  
+
+  // Build driver and customer rows - escape for XSS protection
+  const customerRow = trailer.customer ? `<div class="yard-trailer-customer">${escapeHtml(trailer.customer)}</div>` : '';
+  const driverRow = trailer.driverName ? `<div class="yard-trailer-driver">${escapeHtml(trailer.driverName)}</div>` : '';
+
   container.innerHTML = `
     <div class="yard-trailer ${statusClass} ${highlightClass} ${searchClass} ${liveClass}"
          draggable="true"
          data-trailer-id="${trailer.id}"
          data-location="staging">
       <div class="yard-trailer-header">
-        <span class="trailer-carrier">${trailer.carrier}</span>
+        <span class="trailer-carrier">${escapeHtml(trailer.carrier)}</span>
         <div style="display:flex;align-items:center;">
             <span class="yard-status-badge ${statusClass}">${statusText}</span>
         </div>
@@ -6592,20 +6591,20 @@ async function loadShipped(search = '') {
       return `
         <div class="shipped-item" data-trailer-id="${t.id}">
           <div class="shipped-item-header">
-            <span class="shipped-carrier">${t.carrier ? t.carrier : 'Unknown'}</span>
+            <span class="shipped-carrier">${t.carrier ? escapeHtml(t.carrier) : 'Unknown'}</span>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
               ${editMode ? `<button class="btn-delete-shipped" data-shipped-id="${t.id}" title="Delete shipped record">🗑️</button>` : ''}
               <span class="shipped-status">SHIPPED</span>
               <span class="shipped-date">${shippedDate} ${shippedTime}</span>
-              ${t.shippedBy ? `<span class="shipped-by" title="Shipped by">👤 ${t.shippedBy}</span>` : ''}
+              ${t.shippedBy ? `<span class="shipped-by" title="Shipped by">👤 ${escapeHtml(t.shippedBy)}</span>` : ''}
             </div>
           </div>
           <div class="shipped-details">
-            ${t.number ? `<div class="shipped-detail"><span class="shipped-detail-label">Trailer:</span> ${t.number}</div>` : ''}
-            ${t.customer ? `<div class="shipped-detail"><span class="shipped-detail-label">Customer:</span> ${t.customer}</div>` : ''}
-            ${t.loadNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Load:</span> ${t.loadNumber}</div>` : ''}
+            ${t.number ? `<div class="shipped-detail"><span class="shipped-detail-label">Trailer:</span> ${escapeHtml(t.number)}</div>` : ''}
+            ${t.customer ? `<div class="shipped-detail"><span class="shipped-detail-label">Customer:</span> ${escapeHtml(t.customer)}</div>` : ''}
+            ${t.loadNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Load:</span> ${escapeHtml(t.loadNumber)}</div>` : ''}
             ${t.doorNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Door:</span> ${t.doorNumber}</div>` : ''}
-            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Notes:</span> ${t.contents}</div>` : ''}
+            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Notes:</span> ${escapeHtml(t.contents)}</div>` : ''}
           </div>
         </div>
       `;
@@ -6736,20 +6735,20 @@ async function loadReceived(search = '') {
       return `
         <div class="shipped-item" data-trailer-id="${t.id}">
           <div class="shipped-item-header">
-            <span class="shipped-carrier">${t.carrier ? t.carrier : 'Unknown'}</span>
+            <span class="shipped-carrier">${t.carrier ? escapeHtml(t.carrier) : 'Unknown'}</span>
             <div style="display: flex; gap: 0.5rem; align-items: center;">
               ${editMode ? `<button class="btn-delete-shipped" data-received-id="${t.id}" title="Delete received record">🗑️</button>` : ''}
               <span class="received-status">RECEIVED</span>
               <span class="shipped-date">${receivedDate} ${receivedTime}</span>
-              ${t.receivedBy ? `<span class="shipped-by" title="Received by">👤 ${t.receivedBy}</span>` : ''}
+              ${t.receivedBy ? `<span class="shipped-by" title="Received by">👤 ${escapeHtml(t.receivedBy)}</span>` : ''}
             </div>
           </div>
           <div class="shipped-details">
-            ${t.number ? `<div class="shipped-detail"><span class="shipped-detail-label">Trailer:</span> ${t.number}</div>` : ''}
-            ${t.customer ? `<div class="shipped-detail"><span class="shipped-detail-label">Customer:</span> ${t.customer}</div>` : ''}
-            ${t.loadNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Load:</span> ${t.loadNumber}</div>` : ''}
+            ${t.number ? `<div class="shipped-detail"><span class="shipped-detail-label">Trailer:</span> ${escapeHtml(t.number)}</div>` : ''}
+            ${t.customer ? `<div class="shipped-detail"><span class="shipped-detail-label">Customer:</span> ${escapeHtml(t.customer)}</div>` : ''}
+            ${t.loadNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Load:</span> ${escapeHtml(t.loadNumber)}</div>` : ''}
             ${t.doorNumber ? `<div class="shipped-detail"><span class="shipped-detail-label">Door:</span> ${t.doorNumber}</div>` : ''}
-            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Notes:</span> ${t.contents}</div>` : ''}
+            ${t.contents ? `<div class="shipped-detail"><span class="shipped-detail-label">Notes:</span> ${escapeHtml(t.contents)}</div>` : ''}
           </div>
         </div>
       `;
