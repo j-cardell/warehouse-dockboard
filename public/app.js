@@ -127,6 +127,13 @@ async function login(username, password) {
       authState.isAuthenticated = true;
       authState.availableFacilities = data.availableFacilities;
       authState.multiFacilityMode = data.multiFacilityMode || !!data.availableFacilities;
+
+      // Redirect loader/loading-tablet users to /loader
+      if (data.user?.role === 'loader' || data.user?.role === 'loading-tablet') {
+        window.location.href = '/loader';
+        return true;
+      }
+
       console.log('[Auth] Token stored, calling updateAuthUI...');
       updateAuthUI();
       // Close modal if open
@@ -285,6 +292,12 @@ async function selectFacility(facilityId) {
     authState.isAuthenticated = true;
     authState.availableFacilities = data.availableFacilities;
     localStorage.setItem('dockboard_token', data.token);
+
+    // Redirect loader/loading-tablet users to /loader
+    if (data.user?.role === 'loader' || data.user?.role === 'loading-tablet') {
+      window.location.href = '/loader';
+      return;
+    }
 
     // Close modal
     const modal = document.getElementById('modal-select-facility');
@@ -565,10 +578,13 @@ function updateAuthUI() {
     if (dropdownRole) dropdownRole.textContent = `Role: ${role}`;
 
     // Show/hide admin-only elements
+    const editModeBtn = document.getElementById('btn-edit-mode');
     if (role === 'admin') {
       document.body.classList.add('is-admin');
+      if (editModeBtn) editModeBtn.classList.remove('hidden');
     } else {
       document.body.classList.remove('is-admin');
+      if (editModeBtn) editModeBtn.classList.add('hidden');
     }
 
     // Show/hide bootstrap admin-only elements
@@ -5132,6 +5148,7 @@ function updateStats() {
 
 function updateUnassignedCount() {
   const badge = document.getElementById('unassigned-count-badge');
+  const btn = document.getElementById('btn-view-unassigned');
   if (!badge) return;
 
   // Count only truly unassigned trailers (no yardSlotId)
@@ -5141,8 +5158,11 @@ function updateUnassignedCount() {
   // Hide badge if 0, show if > 0
   if (count === 0) {
     badge.classList.add('hidden');
+    // Also hide the entire button when unassigned yard is empty
+    if (btn) btn.classList.add('hidden');
   } else {
     badge.classList.remove('hidden');
+    if (btn) btn.classList.remove('hidden');
   }
 }
 
@@ -5723,7 +5743,12 @@ function setupModals() {
   document.getElementById('btn-undo')?.addEventListener('click', () => {
     undoLastAction();
   });
-  
+
+  // Loader view button - switch to loader interface
+  document.getElementById('btn-loader-view')?.addEventListener('click', () => {
+    window.location.href = '/loader';
+  });
+
   // Clear search button
   document.getElementById('btn-clear-search')?.addEventListener('click', () => {
     clearSearch();
@@ -8878,19 +8903,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       // Handle password/PIN field
+    // IMPORTANT: loading-tablet is for SHARED DEVICES ONLY - uses simple PIN for device login
+    // loader role is for individual accounts with proper passwords
       if (passwordField) {
         if (role === 'loader') {
-          passwordField.removeAttribute('required');
-          passwordField.removeAttribute('minlength');
-          passwordField.placeholder = 'Not needed for loaders';
-          passwordField.type = 'text';
+          passwordField.setAttribute('required', '');
+          passwordField.setAttribute('minlength', '6');
+          passwordField.placeholder = 'Enter password (min 6 chars)';
+          passwordField.type = 'password';
           passwordField.removeAttribute('pattern');
           passwordField.removeAttribute('maxlength');
           passwordField.removeAttribute('inputmode');
-          passwordField.value = '';
-          if (passwordGroup) passwordGroup.style.opacity = '0.5';
-          if (passwordLabel) passwordLabel.textContent = 'Password';
-          if (roleHelpText) roleHelpText.textContent = 'Loaders select their name on tablets. No password needed.';
+          if (passwordGroup) passwordGroup.style.opacity = '1';
+          if (passwordLabel) passwordLabel.textContent = 'Password *';
+          if (roleHelpText) roleHelpText.textContent = 'Loaders login with username/password on tablet.';
         } else if (role === 'loading-tablet') {
           passwordField.setAttribute('required', '');
           passwordField.removeAttribute('minlength');
@@ -8934,12 +8960,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const password = document.getElementById('new-user-password')?.value;
         const role = document.getElementById('new-user-role')?.value;
 
-        // Password/PIN not required for loader role
-        const payload = { username, role };
-        if (role !== 'loader') {
-          // Include password/PIN for all other roles
-          payload.password = password;
-        }
+        // Include password for all roles
+        const payload = { username, password, role };
 
         try {
           const res = await apiCall('/users', 'POST', payload);

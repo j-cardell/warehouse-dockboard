@@ -2604,6 +2604,10 @@ body.edit-mode-active .sidebar-bottom-handle:hover {
     background: rgba(0, 0, 0, 0.3);
     border-radius: var(--radius-lg);
     backdrop-filter: blur(4px);
+    /* Hide when empty - only show when has children */
+    &:empty {
+        display: none;
+    }
 }
 
 .toast {

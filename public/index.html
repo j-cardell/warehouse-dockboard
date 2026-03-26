@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="door-edit.css?v=3">
     <link rel="stylesheet" href="auth.css?v=3">
     <link rel="stylesheet" href="time-picker.css?v=1">
+    <script src="auth-guard.js"></script>
 </head>
 <body>
     <!-- Full Page Login Screen -->
@@ -159,6 +160,9 @@
                 </div>
             </div>
             <div class="header-actions">
+                <button id="btn-loader-view" class="btn btn-secondary" title="Switch to Loader Interface">
+                    Loader
+                </button>
                 <button id="btn-undo" class="btn btn-secondary" disabled title="Nothing to undo">
                     ↩️ Undo
                 </button>
@@ -166,7 +170,7 @@
                 <button id="btn-view-history" class="btn btn-secondary">📜 History</button>
                 <button id="btn-view-shipped" class="btn btn-secondary">📦 Shipped</button>
                 <button id="btn-view-received" class="btn btn-secondary">📥 Received</button>
-                <button id="btn-view-unassigned" class="btn btn-secondary">🚛 Unassigned Yard <span id="unassigned-count-badge" class="count-badge">0</span></button>
+                <button id="btn-view-unassigned" class="btn btn-secondary"><span style="color: red;">❓</span> Unassigned Yard <span id="unassigned-count-badge" class="count-badge">0</span></button>
                 <button id="btn-analytics" class="btn btn-secondary">📊 Analytics</button>
                 <button id="btn-manage-carriers" class="btn btn-secondary">🚛 Carriers</button>
                 <button id="btn-archives" class="btn btn-secondary edit-only hidden" title="Data Archives">🗄️ Archives</button>
@@ -615,8 +619,8 @@
                                 <option value="viewer">Viewer (Read-only)</option>
                                 <option value="user">User (Can manage trailers)</option>
                                 <option value="admin">Admin (Full access)</option>
-                                <option value="loader">Loader (Tablet - name selection)</option>
-                                <option value="loading-tablet">Loading Tablet (PIN-protected device)</option>
+                                <option value="loader">Loader - Loading Tablet Only</option>
+                                <option value="loading-tablet">Loading Tablet - Shared Device Only (PIN login)</option>
                             </select>
                             <small id="role-help-text" style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">Loaders select their name on tablets. No password needed.</small>
                         </div>

@@ -1,4 +1,4 @@
-// Auth Guard: Redirect loader/loading-tablet users to /loader
+// Auth Guard: Redirect loader/loading-tablet users to /loader, keep users on main app
 (function() {
   const token = localStorage.getItem('dockboard_token');
   if (!token) return;
@@ -19,6 +19,7 @@
     const payload = JSON.parse(jsonPayload);
 
     // Redirect loader/loading-tablet users to /loader
+    // Regular users stay on main app and can optionally use /loader
     if (payload.role === 'loader' || payload.role === 'loading-tablet') {
       window.location.replace('/loader');
     }

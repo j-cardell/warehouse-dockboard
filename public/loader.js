@@ -1,10 +1,15 @@
         // State
-        let currentLoader = null;        // The logged-in user (loading-tablet)
-        let selectedOperatorName = null; // The selected loader for history tracking
+        // IMPORTANT: loading-tablet role is for SHARED DEVICES only
+        // currentLoader = the tablet login (loading-tablet user)
+        // selectedOperatorName = the actual loader who selected their name from the list
+        // For individual loader accounts (loader role), currentLoader and selectedOperatorName are the same
+        let currentLoader = null;        // The logged-in user (loading-tablet tablet or loader)
+        let selectedOperatorName = null; // The selected loader for history tracking (only different for shared tablet)
         let currentDoorNumber = '';
         let currentTrailer = null;
         let token = localStorage.getItem('dockboard_token');
         let currentPin = '';
+        let currentUserRole = null;      // Store role to determine if back button should show
 
         // Screens
         const screens = {
@@ -46,7 +51,8 @@
         // Check auth and role
         async function checkAuth() {
             if (!token) {
-                showScreen('pin');
+                // Redirect to main login page
+                window.location.href = '/';
                 return false;
             }
 
@@ -57,29 +63,38 @@
                 const data = await res.json();
 
                 if (!data.authenticated) {
-                    // Token invalid/expired - show PIN screen
+                    // Token invalid/expired - redirect to main login page
                     token = null;
                     localStorage.removeItem('dockboard_token');
-                    showScreen('pin');
+                    window.location.href = '/';
                     return false;
                 }
 
-                // Check if user is loading-tablet, loader, or admin
-                if (!['loading-tablet', 'loader', 'admin'].includes(data.user.role)) {
+                // Check if user is loading-tablet, loader, user, or admin
+                if (!['loading-tablet', 'loader', 'user', 'admin'].includes(data.user.role)) {
                     // Wrong role - redirect to main app
                     window.location.href = '/';
                     return false;
                 }
 
-                // Always show the actual logged-in user (loading-tablet) in header
+                // Always show the actual logged-in user in header
                 currentLoader = data.user.username;
+                currentUserRole = data.user.role;
                 updateLoaderDisplay();
 
+                // Show/hide back button based on role
+                // Only show for user/admin - loader/loading-tablet stay on loader page
+                const mainViewBtn = document.getElementById('btn-main-view');
+                if (mainViewBtn) {
+                    mainViewBtn.style.display = (data.user.role === 'user' || data.user.role === 'admin') ? '' : 'none';
+                }
+
                 // If loading-tablet role, show name selection for history tracking
+                // Loader, user, and admin go straight to door entry
                 if (data.user.role === 'loading-tablet') {
                     showScreen('names');
                 } else {
-                    // Regular loader - go straight to door entry
+                    // Regular loader, user, or admin - go straight to door entry
                     showScreen('door');
                 }
 
@@ -294,8 +309,8 @@
             if (logoutModal) {
                 logoutModal.style.display = 'none';
             }
-            // Show PIN screen (hides the header via showScreen)
-            showScreen('pin');
+            // Redirect to main login page
+            window.location.href = '/';
         }
 
         // Cancel logout
@@ -617,11 +632,16 @@
             window.location.reload();
         });
 
+        // Back to main app button - only show for user/admin roles (not loading-tablet or loader)
+        document.getElementById('btn-main-view')?.addEventListener('click', () => {
+            window.location.href = '/';
+        });
+
         // Initialize
         async function init() {
-            // Quick synchronous check - if no token, show PIN immediately to avoid flash
+            // Quick synchronous check - if no token, redirect to main login immediately
             if (!token) {
-                showScreen('pin');
+                window.location.href = '/';
                 return;
             }
 
@@ -630,6 +650,9 @@
             const authed = await checkAuth();
             document.body.style.opacity = '1';
 
+            // checkAuth() already shows the correct screen:
+            // - loading-tablet: shows name selection (then we load names)
+            // - loader/admin: shows door entry (no name selection needed)
             if (authed) {
                 await loadLoaderNames();
             }

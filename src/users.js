@@ -262,17 +262,22 @@ async function createUser({ id, username, password, role = "viewer", homeFacilit
   // Validate password/PIN
   let passwordHash = null;
   if (role === "loader") {
-    // Loaders don't use passwords - they select their name on tablet
-    // Generate a random hash that can't be used for login
-    passwordHash = "LOADER_NO_PASSWORD_" + uuidv4();
+    // Loaders require a password (minimum 6 characters)
+    if (!password || password.length < 6) {
+      return { success: false, error: "Loader requires a password (minimum 6 characters)" };
+    }
+    passwordHash = await hashPassword(password);
   } else if (role === "loading-tablet") {
-    // Loading-tablet users use a 6-digit PIN
+    // IMPORTANT: loading-tablet role is ONLY for shared tablet devices
+    // This is a device login, not a user login - multiple loaders use the same tablet
+    // After logging in, loaders select their actual name from a list for history tracking
+    // Use "loader" role for individual loader accounts with their own password
     if (!password || !/^\d{6}$/.test(password)) {
       return { success: false, error: "Loading-tablet requires a 6-digit PIN" };
     }
-    // Store PIN in plaintext for tablet (like a device code, not a secure password)
-    // Prepend with TABLET_ so we know to compare as PIN not bcrypt
-    passwordHash = "TABLET_" + password;
+    // Hash the PIN securely (bcrypt like other passwords)
+    // PINs are still limited to 6 digits but stored hashed
+    passwordHash = await hashPassword(password);
   } else {
     if (!password || password.length < 8) {
       return { success: false, error: "Password must be at least 8 characters" };
@@ -338,11 +343,11 @@ async function updateUser(userId, updates, facilityId = DEFAULT_FACILITY_ID) {
 
   if (updates.password) {
     if (user.role === "loading-tablet") {
-      // Loading-tablet uses 6-digit PIN
+      // Loading-tablet uses 6-digit PIN (hashed securely like passwords)
       if (!/^\d{6}$/.test(updates.password)) {
         return { success: false, error: "PIN must be 6 digits" };
       }
-      user.passwordHash = "TABLET_" + updates.password;
+      user.passwordHash = await hashPassword(updates.password);
     } else {
       if (updates.password.length < 8) {
         return { success: false, error: "Password must be at least 8 characters" };
@@ -394,11 +399,11 @@ async function updateGlobalUser(userId, updates) {
 
   if (updates.password) {
     if (user.role === "loading-tablet") {
-      // Loading-tablet uses 6-digit PIN
+      // Loading-tablet uses 6-digit PIN (hashed securely like passwords)
       if (!/^\d{6}$/.test(updates.password)) {
         return { success: false, error: "PIN must be 6 digits" };
       }
-      user.passwordHash = "TABLET_" + updates.password;
+      user.passwordHash = await hashPassword(updates.password);
     } else {
       if (updates.password.length < 8) {
         return { success: false, error: "Password must be at least 8 characters" };

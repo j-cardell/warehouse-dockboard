@@ -411,7 +411,7 @@ The server is organized into modules:
 - `viewer` (0) - Read-only access
 - `user` (1) - Standard operations
 - `loader` (1) - Forklift operator (tablet interface, no password, selects name from list)
-- `loading-tablet` (1) - Shared tablet device (6-digit PIN login, identifies facility for loaders)
+- `loading-tablet` (1) - **SHARED DEVICE ONLY** - Fixed tablet at dock doors (6-digit PIN). Loaders select their name after login. Not for individual users - use `loader` role for personal accounts.
 - `admin` (2) - Full access including user management and facility switching
 
 ### Real-Time Updates (SSE)

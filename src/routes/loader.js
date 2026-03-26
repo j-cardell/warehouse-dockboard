@@ -4,6 +4,15 @@
  * POST /api/loader/status - Update trailer status
  *
  * Simple tablet interface for forklift operators to mark trailers loaded/empty
+ *
+ * ROLE DISTINCTION:
+ * - "loading-tablet": SHARED DEVICE ONLY - Fixed tablet at dock doors (6-digit PIN).
+ *                     Multiple loaders use same tablet login, then select their name.
+ *                     This is for shared tablet scenarios, not individual users.
+ * - "loader":         Individual loader account with username/password.
+ *                     Loaders login directly and operate as themselves.
+ *
+ * For personal loader accounts, use "loader" role. For shared dock tablets, use "loading-tablet".
  */
 
 const express = require("express");
@@ -14,9 +23,10 @@ const { broadcastStateChange, broadcastToast } = require("../sse");
 const { getAllUsers } = require("../users");
 
 /**
- * Middleware to require loader, loading-tablet role or admin
+ * Middleware to require loader, loading-tablet, user, or admin role
  * Admins can act as any loader by providing loaderName in request
  * Loading-tablet users (the device) are allowed, actual operator name comes from selection
+ * Regular users can also use loader interface (e.g., when they need to load/unload)
  */
 function requireLoader(req, res, next) {
   if (!req.user) {
@@ -26,18 +36,14 @@ function requireLoader(req, res, next) {
     });
   }
 
-  // Loaders and loading-tablet users can access
-  if (req.user.role === "loader" || req.user.role === "loading-tablet") {
-    return next();
-  }
-
-  // Admins can access and act on behalf of a loader
-  if (req.user.role === "admin") {
+  // Loaders, loading-tablet, regular users, and admins can all access
+  const allowedRoles = ["loader", "loading-tablet", "user", "admin"];
+  if (allowedRoles.includes(req.user.role)) {
     return next();
   }
 
   return res.status(403).json({
-    error: "Loader or admin access required",
+    error: "Loader access required",
     code: "LOADER_REQUIRED",
   });
 }
