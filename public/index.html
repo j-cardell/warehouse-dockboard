@@ -664,14 +664,14 @@
         <div class="modal-content" style="max-width: 500px;">
             <div class="modal-header">
                 <h2>🏭 Select Facility</h2>
-                <button class="btn btn-secondary" onclick="closeModal('modal-facility-selector')">×</button>
+                <button class="btn btn-secondary" id="btn-close-facility-selector">×</button>
             </div>
             <div class="modal-body">
                 <p style="margin-bottom: 1rem; color: var(--text-secondary);">Please select a facility to manage:</p>
                 <div id="facility-selector-list" style="display: flex; flex-direction: column; gap: 0.5rem;"></div>
                 <div id="no-facilities-message" class="hidden" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
                     <p>No facilities exist yet.</p>
-                    <button class="btn btn-primary" onclick="showSetupModal()" style="margin-top: 1rem;">Create First Facility</button>
+                    <button class="btn btn-primary" id="btn-create-first-facility" style="margin-top: 1rem;">Create First Facility</button>
                 </div>
             </div>
         </div>

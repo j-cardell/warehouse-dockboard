@@ -136,6 +136,8 @@ async function login(username, password) {
 
       console.log('[Auth] Token stored, calling updateAuthUI...');
       updateAuthUI();
+      // Load user settings immediately after login
+      await loadSettings();
       // Close modal if open
       const modal = document.getElementById('modal-login');
       if (modal && modal.classList.contains('active')) closeModal('modal-login');
@@ -8309,7 +8311,7 @@ function openTimePicker(targetInputId) {
         ${timeButtons}
       </div>
       <div class="modal-actions">
-        <button class="btn btn-secondary" onclick="document.getElementById('${targetInputId}').value = ''; document.getElementById('modal-time-picker').remove();">Clear</button>
+        <button class="btn btn-secondary" id="btn-time-picker-clear">Clear</button>
         <button class="btn btn-secondary close-modal">Cancel</button>
       </div>
     </div>
@@ -8327,7 +8329,13 @@ function openTimePicker(targetInputId) {
   modal.querySelectorAll('.close-modal').forEach(btn => {
     btn.addEventListener('click', () => modal.remove());
   });
-  
+
+  // Clear button handler (CSP compliance - no inline onclick)
+  modal.querySelector('#btn-time-picker-clear')?.addEventListener('click', () => {
+    input.value = '';
+    modal.remove();
+  });
+
   modal.addEventListener('click', (e) => {
     if (e.target === modal) modal.remove();
   });
@@ -8823,6 +8831,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-manage-carriers')?.addEventListener('click', () => { if (requireAuth()) { openModal('modal-carriers'); renderCarriersList(); } });
   document.getElementById('btn-settings')?.addEventListener('click', () => { if (requireAuth()) openSettingsModal(); });
 
+  // Modal close buttons (CSP compliance - no inline onclick)
+  document.getElementById('btn-close-facility-selector')?.addEventListener('click', () => closeModal('modal-facility-selector'));
+  document.getElementById('btn-create-first-facility')?.addEventListener('click', () => showSetupModal());
+
   // User dropdown toggle
   const userMenuBtn = document.getElementById('btn-user-menu');
   const userDropdown = document.getElementById('user-dropdown');
@@ -9219,7 +9231,7 @@ async function openFacilitiesManagementModal() {
       <div class="modal-content" style="max-width: 600px;">
         <div class="modal-header">
           <h2>🏭 Manage Facilities</h2>
-          <button class="btn btn-secondary" onclick="closeModal('modal-facilities')">✕</button>
+          <button class="btn btn-secondary close-modal">✕</button>
         </div>
         <div id="facilities-list" style="max-height: 400px; overflow-y: auto; padding: 1rem;">
           <p style="color: var(--text-secondary); text-align: center;">Loading facilities...</p>
@@ -9233,6 +9245,16 @@ async function openFacilitiesManagementModal() {
 
     // Add event listener for create facility button
     document.getElementById('btn-create-facility')?.addEventListener('click', showCreateFacilityModal);
+
+    // Add event listeners for close buttons
+    modal.querySelectorAll('.close-modal').forEach(btn => {
+      btn.addEventListener('click', () => closeModal('modal-facilities'));
+    });
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal('modal-facilities');
+    });
   }
 
   modal.classList.add('active');
@@ -9265,12 +9287,20 @@ async function renderFacilitiesList() {
           <div style="display: flex; gap: 0.5rem;">
             ${facility.id === authState.user?.currentFacility ?
               '<span class="badge" style="background: var(--success); color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Current</span>' :
-              `<button class="btn btn-sm btn-secondary" onclick="switchFacility('${facility.id}')">Switch</button>`
+              `<button class="btn btn-sm btn-secondary switch-facility-btn" data-facility-id="${facility.id}">Switch</button>`
             }
           </div>
         </div>
       </div>
     `).join('');
+
+    // Add event listeners for switch facility buttons (CSP compliance)
+    container.querySelectorAll('.switch-facility-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const facilityId = btn.dataset.facilityId;
+        if (facilityId) switchFacility(facilityId);
+      });
+    });
   } catch (err) {
     container.innerHTML = `<p style="color: var(--danger); text-align: center; padding: 2rem;">Error loading facilities: ${escapeHtml(err.message)}</p>`;
   }
@@ -9284,7 +9314,7 @@ function showCreateFacilityModal() {
     <div class="modal-content" style="max-width: 500px;">
       <div class="modal-header">
         <h2>➕ Create New Facility</h2>
-        <button class="btn btn-secondary" onclick="closeModal('modal-create-facility')">✕</button>
+        <button class="btn btn-secondary close-modal">✕</button>
       </div>
       <form id="create-facility-form" style="padding: 1rem;">
         <div style="margin-bottom: 1rem;">
@@ -9335,7 +9365,7 @@ function showCreateFacilityModal() {
         </div>
         <div id="create-facility-error" class="hidden" style="color: var(--danger); margin-bottom: 1rem; padding: 0.75rem; background: var(--danger-light); border-radius: 0.25rem;"></div>
         <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-create-facility')">Cancel</button>
+          <button type="button" class="btn btn-secondary close-modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Create Facility</button>
         </div>
       </form>
