@@ -688,7 +688,9 @@ function updateUserSettings(userId, settings, facilityId = DEFAULT_FACILITY_ID) 
   const user = usersData.users[userIndex];
   // Deep merge for nested objects like sidebarLayout
   user.settings = deepMerge(user.settings || {}, settings);
-  user.updatedAt = new Date().toISOString();
+  // NOTE: Do NOT update user.updatedAt here - settings changes should NOT invalidate tokens
+  // Token staleness detection relies on updatedAt, and we don't want users logged out
+  // when they change sidebar layout or trailer display preferences
 
   if (!saveUsers(usersData, facilityId)) {
     return { success: false, error: "Failed to save settings" };

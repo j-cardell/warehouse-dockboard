@@ -4543,6 +4543,66 @@ body.is-admin .admin-only {
 }
 
 /* ============================================
+   Viewer Mode - TV Display
+   ============================================ */
+
+/* Viewer mode hides most UI elements for TV display */
+body[data-role="viewer"] {
+    /* Minimal header with just user menu */
+    .header {
+        padding: 0.5rem;
+        min-height: auto;
+    }
+
+    /* Hide staging section */
+    #staging-section,
+    [data-section="staging"] {
+        display: none !important;
+    }
+
+    /* Hide yard section */
+    #yard-section,
+    [data-section="yard"] {
+        display: none !important;
+    }
+
+    /* Hide carrier summary bar */
+    .carrier-summary,
+    #carrier-summary-bar {
+        display: none !important;
+    }
+
+    /* Hide action buttons */
+    #btn-create-trailer,
+    #btn-undo,
+    #btn-view-history,
+    #btn-view-shipped,
+    #btn-view-received,
+    #btn-view-unassigned,
+    #btn-analytics,
+    #btn-manage-carriers,
+    #btn-archives,
+    #btn-generate-demo,
+    #btn-reset-facility,
+    #btn-edit-mode,
+    #btn-loader-view {
+        display: none !important;
+    }
+
+    /* Show only dock grid and queues */
+    .main-content {
+        padding: 0.5rem;
+    }
+
+    /* Keep user menu visible for logout/settings */
+    #auth-section,
+    #user-info,
+    #btn-user-menu {
+        display: flex !important;
+    }
+}
+
+/* ============================================
    Setup Modal Styles
    ============================================ */
 

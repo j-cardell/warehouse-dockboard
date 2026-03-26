@@ -577,6 +577,9 @@ function updateAuthUI() {
     if (usernameDisplay) usernameDisplay.textContent = username;
     if (dropdownRole) dropdownRole.textContent = `Role: ${role}`;
 
+    // Set role-based body attribute for CSS targeting
+    document.body.setAttribute('data-role', role);
+
     // Show/hide admin-only elements
     const editModeBtn = document.getElementById('btn-edit-mode');
     if (role === 'admin') {
@@ -585,6 +588,12 @@ function updateAuthUI() {
     } else {
       document.body.classList.remove('is-admin');
       if (editModeBtn) editModeBtn.classList.add('hidden');
+    }
+
+    // Disable edit mode for non-admin users
+    if (role !== 'admin' && editMode) {
+      editMode = false;
+      document.body.classList.remove('edit-mode-active');
     }
 
     // Show/hide bootstrap admin-only elements
@@ -1074,7 +1083,7 @@ function openSettingsModal() {
             <div style="padding:15px;">
               <label style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
                 <span style="min-width:100px;">Columns:</span>
-                <input type="range" id="grid-columns" min="4" max="15" value="${settings.gridColumns || 10}" style="flex:1;" oninput="document.getElementById('grid-col-val').textContent=this.value; document.getElementById('dock-grid').style.setProperty('--grid-columns', this.value);">
+                <input type="range" id="grid-columns" min="4" max="15" value="${settings.gridColumns || 10}" style="flex:1;">
                 <span id="grid-col-val" style="min-width:40px;text-align:right;font-weight:bold;color:#fbbf24;">${settings.gridColumns || 10}</span>
               </label>
               <p style="font-size:0.75rem;color:#9ca3af;margin:0;">Adjust the number of columns to change cell size. Fewer columns = Larger cells.</p>
@@ -1276,7 +1285,14 @@ function openSettingsModal() {
     modal.remove();
     openSettingsModal();
   });
-  
+
+  // Grid columns slider - live preview
+  document.getElementById('grid-columns')?.addEventListener('input', (e) => {
+    const val = e.target.value;
+    document.getElementById('grid-col-val').textContent = val;
+    document.getElementById('dock-grid')?.style.setProperty('--grid-columns', val);
+  });
+
   // Close handlers
   const closeSettings = () => { modal.remove(); };
   modal.querySelectorAll('.close-modal').forEach(btn => btn?.addEventListener('click', closeSettings));
