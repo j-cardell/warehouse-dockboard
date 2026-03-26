@@ -575,7 +575,7 @@
 
                 // Auto-return after 3 seconds
                 setTimeout(() => {
-                    resetToNameSelection();
+                    resetToStart();
                 }, 3000);
 
             } catch (err) {
@@ -586,20 +586,29 @@
             }
         }
 
-        // Reset to name selection (operator must re-select their name)
-        function resetToNameSelection() {
+        // Reset to appropriate starting screen based on role
+        // loading-tablet: name selection (shared device)
+        // loader/user/admin: door entry (individual account)
+        function resetToStart() {
             currentDoorNumber = '';
             currentTrailer = null;
-            selectedOperatorName = null; // Clear operator so they must select again
+            selectedOperatorName = null;
             updateDoorDisplay();
-            showScreen('names');
+
+            // Only loading-tablet role shows name selection
+            // All other roles (loader, user, admin) go straight to door entry
+            if (currentUserRole === 'loading-tablet') {
+                showScreen('names');
+            } else {
+                showScreen('door');
+            }
         }
 
         // Error screen tap to reset
-        document.getElementById('screen-error').addEventListener('click', resetToNameSelection);
+        document.getElementById('screen-error').addEventListener('click', resetToStart);
 
         // Confirmation screen tap to reset
-        document.getElementById('screen-confirm').addEventListener('click', resetToNameSelection);
+        document.getElementById('screen-confirm').addEventListener('click', resetToStart);
 
         // iOS Safari fix: ensure logout item is clickable via touch events
         const logoutItem = document.querySelector('.logout-item');
