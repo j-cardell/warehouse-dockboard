@@ -559,6 +559,11 @@ router.post("/:id/ship", requireAuth, requireRole("user"), (req, res) => {
   if (!state.shippedTrailers) state.shippedTrailers = [];
   state.shippedTrailers.push(trailer);
 
+  // Keep last 5000 shipped trailers to prevent unbounded growth
+  if (state.shippedTrailers.length > 5000) {
+    state.shippedTrailers = state.shippedTrailers.slice(-5000);
+  }
+
   // Auto-assign from queue
   let autoAssigned = null;
   if (clearedDoorId) {
@@ -721,6 +726,11 @@ router.post("/:id/receive", requireAuth, requireRole("user"), (req, res) => {
 
   if (!state.receivedTrailers) state.receivedTrailers = [];
   state.receivedTrailers.push(trailer);
+
+  // Keep last 5000 received trailers to prevent unbounded growth
+  if (state.receivedTrailers.length > 5000) {
+    state.receivedTrailers = state.receivedTrailers.slice(-5000);
+  }
 
   // Auto-assign from queue
   let autoAssigned = null;
