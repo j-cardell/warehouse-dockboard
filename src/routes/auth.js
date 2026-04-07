@@ -89,7 +89,7 @@ router.post("/login", loginLimiter, async (req, res) => {
           isBootstrap: true,
         },
         JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN }
+        { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN }
       );
 
       return res.json({
@@ -119,7 +119,7 @@ router.post("/login", loginLimiter, async (req, res) => {
         currentFacility: DEFAULT_FACILITY_ID,
       },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+      { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN }
     );
 
     return res.json({
@@ -199,7 +199,7 @@ router.post("/login", loginLimiter, async (req, res) => {
         passwordReset: true,
       },
       JWT_SECRET,
-      { expiresIn: "10m" }
+      { algorithm: 'HS256', expiresIn: "10m" }
     );
 
     return res.json({
@@ -246,7 +246,7 @@ router.post("/login", loginLimiter, async (req, res) => {
         isBootstrap: true,
       },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+      { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN }
     );
 
     // Use first available facility as default for bootstrap user
@@ -294,7 +294,7 @@ router.post("/login", loginLimiter, async (req, res) => {
       isVisiting,
     },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
+    { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN }
   );
 
   res.json({
@@ -519,7 +519,7 @@ router.post("/set-new-password", async (req, res) => {
         currentFacility: facilityId,
       },
       JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+      { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN }
     );
 
     res.json({
@@ -646,7 +646,7 @@ router.post("/switch-facility", requireAuth, async (req, res) => {
       isVisiting: isVisiting, // Flag indicating user is outside their home facility
     },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
+    { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN }
   );
 
   // Get available facilities for admins
@@ -725,7 +725,7 @@ router.post("/set-home-facility", requireAuth, async (req, res) => {
       isVisiting: isVisiting,
     },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
+    { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN }
   );
 
   res.json({

@@ -82,7 +82,7 @@ function generateToken(user) {
       iat: Math.floor(Date.now() / 1000), // Issued at timestamp
     },
     JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
+    { algorithm: 'HS256', expiresIn: JWT_EXPIRES_IN }
   );
 }
 
