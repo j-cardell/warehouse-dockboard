@@ -31,8 +31,22 @@ const {
   DEFAULT_SETTINGS,
 } = require("../config");
 const { loadSettings, saveSettings } = require("../state");
-const { hasUsers, hasAdminUser, createInitialAdmin } = require("../users");
+const { hasUsers, hasAdminUser, createInitialAdmin, isBootstrapAdmin } = require("../users");
 const { createFacility } = require("../facilities");
+
+/**
+ * Middleware to check if user is bootstrap admin
+ */
+function requireBootstrapAdmin(req, res, next) {
+  const user = req.user;
+  if (!user || !isBootstrapAdmin(user)) {
+    return res.status(403).json({
+      error: "Only the bootstrap admin can reset facilities",
+      code: "BOOTSTRAP_REQUIRED",
+    });
+  }
+  next();
+}
 
 // Check if setup is needed (public - for first-run detection)
 router.get("/status", (req, res) => {
@@ -260,8 +274,8 @@ router.post("/", requireAuth, async (req, res) => {
   }
 });
 
-// Reset facility - delete all data (protected - requires authentication)
-router.delete("/", requireAuth, requireRole("admin"), (req, res) => {
+// Reset facility - delete all data (protected - requires bootstrap admin)
+router.delete("/", requireAuth, requireBootstrapAdmin, (req, res) => {
   try {
     const facilityId = req.user.currentFacility || req.user.homeFacility;
 
@@ -301,8 +315,8 @@ router.delete("/", requireAuth, requireRole("admin"), (req, res) => {
   }
 });
 
-// Clear all data and reset to initial state (protected - requires authentication)
-router.post("/reset", requireAuth, requireRole("admin"), (req, res) => {
+// Clear all data and reset to initial state (protected - requires bootstrap admin)
+router.post("/reset", requireAuth, requireBootstrapAdmin, (req, res) => {
   try {
     const facilityId = req.user.currentFacility || req.user.homeFacility;
 
