@@ -622,9 +622,9 @@ function updateAuthUI() {
     const resetFacilityBtn = document.getElementById('btn-reset-facility');
     if (resetFacilityBtn) {
       if (authState.user?.isBootstrap) {
-        resetFacilityBtn.classList.remove('hidden');
+        resetFacilityBtn.classList.add('bootstrap-visible');
       } else {
-        resetFacilityBtn.classList.add('hidden');
+        resetFacilityBtn.classList.remove('bootstrap-visible');
       }
     }
 
