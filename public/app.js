@@ -618,6 +618,16 @@ function updateAuthUI() {
       }
     }
 
+    // Show/hide reset facility button (bootstrap only)
+    const resetFacilityBtn = document.getElementById('btn-reset-facility');
+    if (resetFacilityBtn) {
+      if (authState.user?.isBootstrap) {
+        resetFacilityBtn.classList.remove('hidden');
+      } else {
+        resetFacilityBtn.classList.add('hidden');
+      }
+    }
+
     // Update facility display in dropdown
     updateFacilityUI();
 
